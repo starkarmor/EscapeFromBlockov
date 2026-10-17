@@ -15,6 +15,7 @@ local PC = require(script.Parent.PlayerControl)
 local CameraRig = require(script.Parent.CameraRig)
 local Fx = require(script.Parent.Fx)
 local Vision = require(script.Parent.Vision)
+local Sfx = require(script.Parent.Sfx)
 
 local player = Players.LocalPlayer
 local Combat = {}
@@ -36,10 +37,9 @@ function Combat.triggerHeld(): boolean
 end
 
 local function mousePos(): Vector2
-	local m = UserInputService:GetMouseLocation()
-	-- GetMouseLocation includes the top bar inset; viewport rays want viewport pixels
-	local inset = game:GetService("GuiService"):GetGuiInset()
-	return Vector2.new(m.X, m.Y - inset.Y)
+	-- GetMouseLocation is already in viewport pixels (top bar included), the space ViewportPointToRay and the
+	-- IgnoreGuiInset HUD use
+	return UserInputService:GetMouseLocation()
 end
 
 function Combat.cursor(): Vector2
@@ -177,6 +177,7 @@ local function fire(g: any, id: string)
 		Fx.tracer(mz, a, slope, g.BulletSpeed, Guns.range(g), true)
 	end
 	Fx.muzzle(mz, PC.facing)
+	Sfx.play(if (g.ShootSpeed or 1) >= 8 then "rifle" else "pistol")
 	predictedMag = math.max(0, Combat.mag() - 1)
 	predictUntil = os.clock() + 0.5
 	-- scatter grow, recoil, camera kick
@@ -223,6 +224,7 @@ function Combat.update(dt: number)
 			meleeCd = 1 / m.attackSpeed
 			PC.meleeAnim = 1
 			Net.event("Melee"):FireServer()
+			Sfx.play("swoosh")
 			CameraRig.shake(0.1, "melee", Vector2.new(math.sin(PC.facing), math.cos(PC.facing)))
 		end
 		pressed = false
@@ -241,6 +243,39 @@ function Combat.update(dt: number)
 end
 
 function Combat.start()
+	player:GetAttributeChangedSignal("ReloadUntil"):Connect(function()
+		if player:GetAttribute("ReloadUntil") then
+			Sfx.play("reload")
+		end
+	end)
+	player:GetAttributeChangedSignal("UseId"):Connect(function()
+		if player:GetAttribute("UseId") == "bandage" then
+			Sfx.play("bandage")
+		end
+	end)
+	local lastHp = 1e9
+	player:GetAttributeChangedSignal("HP"):Connect(function()
+		local hp = player:GetAttribute("HP")
+		if typeof(hp) == "number" then
+			if hp < lastHp - 0.5 then
+				Sfx.play("hurt")
+			end
+			lastHp = hp
+		end
+	end)
+	Workspace.AttributeChanged:Connect(function(name)
+		if string.sub(name, 1, 5) == "Door_" then
+			Sfx.play("door")
+		end
+	end)
+	Net.event("Extracted").OnClientEvent:Connect(function()
+		Sfx.play("extract")
+	end)
+	Net.event("Toast").OnClientEvent:Connect(function(text: string)
+		if string.sub(text, 1, 1) == "+" then
+			Sfx.play("pickup")
+		end
+	end)
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if processed then
 			return
@@ -264,12 +299,29 @@ function Combat.start()
 				Fx.tracer(a, yaw, c, d, e, false)
 			end
 			Fx.muzzle(a, b[1])
+			Sfx.at(if d >= 100 then "rifle" else "pistol", a, 60)
+		elseif kind == "explode" then
+			Fx.explode(a, b)
+			local dist = (Vector2.new(a.X, a.Z) - PC.pos).Magnitude
+			if dist < 20 then
+				CameraRig.shake(0.35 * (1 - dist / 20), "explosion", Vector2.new(PC.pos.X - a.X, PC.pos.Y - a.Z))
+			end
+			local snd = Instance.new("Sound")
+			snd.SoundId = "rbxasset://sounds/impact_explosion_03.mp3"
+			snd.Volume = 0.8
+			snd.Parent = game:GetService("SoundService")
+			snd:Play()
+			task.delay(4, function()
+				snd:Destroy()
+			end)
 		elseif kind == "impact" then
 			Fx.impact(a, b)
+			Sfx.at("impact", a, 25)
 		end
 	end)
 	Net.event("Hit").OnClientEvent:Connect(function(kill: boolean, crit: boolean, at: Vector3?, dmg: number?)
 		Fx.hitMarker(kill, crit)
+		Sfx.play("hitmarker")
 		if at and dmg then
 			Fx.damageNumber(at, dmg, crit)
 		end

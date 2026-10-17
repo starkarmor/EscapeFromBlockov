@@ -17,6 +17,9 @@ local Interact = require(script.Parent.Interact)
 local Results = require(script.Parent.Results)
 local Vision = require(script.Parent.Vision)
 local DayNight = require(script.Parent.DayNight)
+local Sfx = require(script.Parent.Sfx)
+local Inventory = require(script.Parent.Inventory)
+local stepT = 0
 
 local player = Players.LocalPlayer
 local S = Units.S
@@ -36,6 +39,7 @@ Hud.start()
 Combat.start()
 Interact.start()
 Results.start()
+Inventory.start()
 
 ContextActionService:BindActionAtPriority("CanuckDodge", function(_, state)
 	if state == Enum.UserInputState.Begin then
@@ -52,9 +56,15 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 	if input.KeyCode == Enum.KeyCode.One then
 		PC.held = "gun"
+		PC.slot = 1
 		Net.event("SelectSlot"):FireServer("gun")
+	elseif input.KeyCode == Enum.KeyCode.Two then
+		PC.held = "gun"
+		PC.slot = 2
+		Net.event("SelectSlot"):FireServer("gun2")
 	elseif input.KeyCode == Enum.KeyCode.V then
 		PC.held = "melee"
+		PC.slot = 3
 		Net.event("SelectSlot"):FireServer("melee")
 	elseif SLOT_KEYS[input.KeyCode] then
 		local id = Hud.hotbarItem(SLOT_KEYS[input.KeyCode])
@@ -97,6 +107,15 @@ RunService:BindToRenderStep("Canuckov3C", Enum.RenderPriority.Camera.Value + 1, 
 	Vision.update()
 	Vision.fan(true)
 	DayNight.update()
+	-- footsteps: the walk cycle bands (gz_holdpose thresholds 0.5 / 1 / 2 m/s -> 1.25 / 0.714 / 0.476 s per cycle, 2 steps)
+	local sp = PC.vel.Magnitude
+	if sp > 0.5 and not PC.dashing() then
+		stepT -= dt
+		if stepT <= 0 then
+			stepT = (if sp >= 2 then 0.476 elseif sp >= 1 then 0.714 else 1.25) / 2
+			Sfx.play("step")
+		end
+	end
 	CharAnim.localState = PC.animState()
 	Hud.update(dt)
 end)

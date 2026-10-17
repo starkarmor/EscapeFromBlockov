@@ -116,6 +116,33 @@ function Fx.impact(at: Vector3, normal: Vector3?)
 	end)
 end
 
+--- explosion (VFX grammar: white core, gold body, coral chunks, an expanding ring, clean decay)
+function Fx.explode(at: Vector3, radius: number)
+	local cf = CFrame.new(at.X * S, 0.6 * S, at.Z * S)
+	local core = neon(Vector3.one * 1.5, cf, WHITE)
+	core.Shape = Enum.PartType.Ball
+	TweenService:Create(core, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.one * radius * S * 1.2, Transparency = 1 }):Play()
+	local body = neon(Vector3.one * 2, cf, GOLD, 0.15)
+	body.Shape = Enum.PartType.Ball
+	TweenService:Create(body, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.one * radius * S * 1.8, Transparency = 1 }):Play()
+	local ring = neon(Vector3.new(0.2, 2, 2), CFrame.new(at.X * S, 0.1 * S, at.Z * S) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(255, 248, 233), 0.2)
+	ring.Shape = Enum.PartType.Cylinder
+	TweenService:Create(ring, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.05, radius * S * 2.4, radius * S * 2.4), Transparency = 1 }):Play()
+	for i = 1, 10 do
+		local chunk = neon(Vector3.one * 0.6, cf, if i % 2 == 0 then CORAL else GOLD)
+		local dir = Vector3.new(math.random() - 0.5, math.random() * 0.8 + 0.2, math.random() - 0.5).Unit * radius * S
+		TweenService:Create(chunk, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = cf + dir, Transparency = 1, Size = Vector3.one * 0.1 }):Play()
+		task.delay(0.55, function()
+			chunk:Destroy()
+		end)
+	end
+	task.delay(0.5, function()
+		core:Destroy()
+		body:Destroy()
+		ring:Destroy()
+	end)
+end
+
 -- hit marker + damage numbers live in the HUD gui (Hud.luau owns the ScreenGui; it registers these)
 Fx.onHitMarker = nil :: ((boolean, boolean) -> ())?
 Fx.onDamage = nil :: ((Vector3, number, boolean) -> ())?

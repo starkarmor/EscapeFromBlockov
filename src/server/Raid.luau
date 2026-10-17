@@ -165,6 +165,12 @@ local function syncVitals(p: Player)
 	if Guns.items[r.melee] then
 		w += Guns.items[r.melee].weight or 0
 	end
+	for _, k in { "gun2", "armor", "helmet" } do
+		local inst = (r :: any)[k]
+		if inst and Guns.items[inst.id] then
+			w += Guns.items[inst.id].weight or 0
+		end
+	end
 	for _, s in r.bag do
 		local def = Guns.items[s.id]
 		w += (def and def.weight or 0) * s.n
@@ -177,6 +183,12 @@ Raid.syncVitals = syncVitals
 
 function Raid.sendBag(p: Player)
 	local r = raids[p]
+	-- worn equipment for the inventory screen
+	if r then
+		local x = r :: any
+		p:SetAttribute("Equip", string.format("gun=%s,gun2=%s,melee=%s,armor=%s,helmet=%s",
+			r.gun and r.gun.id or "", x.gun2 and x.gun2.id or "", r.melee or "", x.armor and x.armor.id or "", x.helmet and x.helmet.id or ""))
+	end
 	-- the hotbar reads the backpack from this attribute (id:count pairs)
 	local parts = {}
 	for _, s in (r and r.bag or {}) do
@@ -303,6 +315,13 @@ function Raid.hurt(p: Player, dmg: number, info: any): boolean
 	if os.clock() - r.dodgeAt < Config.Dash.time and not (info and info.direct) then
 		return false
 	end
+	-- armorMultiplier (Player.ts): dmg x 2 / (clamp(armor - pen, 0, 999) + 2); a crit hits the helmet, else the body armor
+	local x = r :: any
+	local worn = if info and info.crit then x.helmet else x.armor
+	if worn and (worn.dur or 0) > 0 and (worn.armor or 0) > 0 and not (info and info.direct) then
+		dmg *= 2 / (math.clamp(worn.armor - ((info and info.pen) or 0), 0, 999) + 2)
+		worn.dur = math.max(0, worn.dur - ((info and info.armorBreak) or 0.55))
+	end
 	r.hp = math.max(0, r.hp - dmg)
 	if info and info.bleed and math.random() < info.bleed then
 		Raid.addBleed(p)
@@ -333,6 +352,12 @@ function Raid.die(p: Player, info: any)
 		table.insert(loot, { id = r.gun.id, n = 1 })
 		if r.gun.ammo > 0 then
 			Raid.addItem(loot, Guns.ammoOf(r.gun.id) or "ammo_s_rusty", r.gun.ammo)
+		end
+	end
+	local x = r :: any
+	for _, k in { "gun2", "armor", "helmet" } do
+		if x[k] then
+			table.insert(loot, { id = x[k].id, n = 1 })
 		end
 	end
 	for _, s in r.bag do
@@ -371,6 +396,13 @@ function Raid.extract(p: Player)
 		if r.gun then
 			Raid.addItem(prof.stash, r.gun.id, 1)
 			table.insert(banked, { id = r.gun.id, n = 1 })
+		end
+		local x = r :: any
+		for _, k in { "gun2", "armor", "helmet" } do
+			if x[k] then
+				Raid.addItem(prof.stash, x[k].id, 1)
+				table.insert(banked, { id = x[k].id, n = 1 })
+			end
 		end
 	end
 	Weapons.targets[p] = nil
@@ -466,7 +498,16 @@ function Raid.start()
 	Players.CharacterAutoLoads = false
 	Weapons.getGun = function(p)
 		local r = raids[p]
-		return r and r.alive and r.gun or nil
+		if not r or not r.alive then
+			return nil
+		end
+		local x = r :: any
+		if x.held == "gun2" then
+			return x.gun2
+		elseif x.held == "melee" then
+			return nil
+		end
+		return r.gun
 	end
 	Weapons.countAmmo = function(p, id)
 		local r = raids[p]

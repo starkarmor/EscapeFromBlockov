@@ -122,16 +122,19 @@ local function buildUi()
 	stroke(title, 2.5)
 	title.Parent = panel
 	boxGrid = grid(panel, 48)
+	boxGrid.Name = "BoxGrid"
 	local bagTitle = title:Clone()
 	bagTitle.Text = "Backpack"
 	bagTitle.TextSize = 20
 	bagTitle.Position = UDim2.fromOffset(16, 206)
 	bagTitle.Parent = panel
 	bagGrid = grid(panel, 240)
+	bagGrid.Name = "BagGrid"
 end
 
 local function slot(parent: Instance, i: number, it: any, onClick: (() -> ())?)
 	local b = Instance.new("TextButton")
+	b.Name = (if parent == boxGrid then "Box" else "Bag") .. i
 	b.LayoutOrder = i
 	b.AutoButtonColor = onClick ~= nil
 	b.Text = ""
@@ -229,7 +232,7 @@ function Interact.update(_dt: number)
 	else
 		Hud.setProgress(nil, nil)
 	end
-	PC.blocked = openBox ~= nil
+	PC.lootOpen = openBox ~= nil
 end
 
 function Interact.start()
@@ -253,7 +256,7 @@ function Interact.start()
 			elseif current then
 				Net.event("Interact"):FireServer(current.id)
 			end
-		elseif input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Tab then
+		elseif input.KeyCode == Enum.KeyCode.Escape then
 			if openBox then
 				Net.event("InteractCancel"):FireServer()
 				closeUi()

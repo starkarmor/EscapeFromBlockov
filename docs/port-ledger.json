@@ -1,26 +1,113 @@
 {
-  "updated": "2026-10-17",
-  "source": "EscapeFromCanuckov web build (../src), Ground Zero main scene",
-  "verified": [
-    {"system": "spawn", "evidence": "Studio telemetry: player at (126.72, 137.38) = Special/BunkerEntry", "method": "real play session, output log"},
-    {"system": "walk speed", "evidence": "telemetry spd=4.00 m/s while walking (Player.ts MOVE.walk 4)", "method": "real keyboard input, output log"},
-    {"system": "camera arm", "evidence": "camera height 37.4 m, FOV 23.5 (CameraRig: 45 m at 55 deg, +0.5)", "method": "telemetry"},
-    {"system": "gun ammo + reload", "evidence": "mag 8 -> 1 over shots, reload -> 8, server-owned", "method": "real mouse input, telemetry"},
-    {"system": "spawners + containers", "evidence": "34 geese spawned, 121 containers rolled by chance", "method": "server log"}
-  ],
-  "open": [
-    {"gap": "no visual comparison yet", "cause": "no screenshot access (Screen Recording / Studio MCP off)", "next": "matched spawn-view screenshots web vs Roblox"},
-    {"gap": "headshot crits", "cause": "client head-collider aim not ported", "next": "cursor ray vs enemy Head part -> crit flag, server validation"},
-    {"gap": "unported enemy kinds", "detail": "boss + contractors, wolf, giant, operator; bloater/stormling/drone need weather/night", "next": "boss rig + AI, quad wolf rig animation"},
-    {"gap": "construction sites (bridges, manhole, one-way gate) not blocking / not buildable", "next": "export notBuilt/built boxes, build interact with material cost"},
-    {"gap": "doors (11, 4 keyed) not built", "next": "door parts with swing + key items"},
-    {"gap": "fog of war / vision fan", "detail": "web hides enemies outside the 100 deg / 37 m view cone with LOS", "next": "client visibility via QSight rays + fan overlay"},
-    {"gap": "AI pathing uses PathfindingService, not the decoded navmesh", "next": "compare paths; port navmesh A* if behaviour differs"},
-    {"gap": "melee (stick, V), hotbar items (bandage etc.), throwables", "next": "port use actions and melee swing"},
-    {"gap": "needs drain, bleeding, armor, weight/overweight", "next": "port Player.ts drains and armor multiplier"},
-    {"gap": "storm, weather, day/night lighting", "next": "drive Lighting from the raid clock; storm countdown"},
-    {"gap": "cave sub-scene, Storm Zone / Warehouse loaders", "next": "out of slice scope; loaders show a toast"},
-    {"gap": "grass, river surface, props are restyled stand-ins", "next": "art pass per docs/art-brief.md"},
-    {"gap": "audio", "next": "all of it"}
-  ]
+ "updated": "2026-10-17",
+ "source": "EscapeFromCanuckov web build (../src), Ground Zero main scene",
+ "verified": [
+  {
+   "system": "spawn + camera",
+   "evidence": "spawn at Special/BunkerEntry; camera arm 45 m / 55 deg / FOV 23.5 plus the decoded SpVolume_start volume (25 deg / 35 m) blending in, matched against the web spawn shot",
+   "method": "MCP screen_capture vs web_shot.mjs at 1684x1080"
+  },
+  {
+   "system": "movement",
+   "evidence": "walk 4.00 m/s base, Agile weight band +15%, dodge peaks 8-10 m/s, facing turns to the cursor",
+   "method": "real keyboard input + telemetry"
+  },
+  {
+   "system": "guns",
+   "evidence": "TT-33 hit = 11 dmg; mag 8 -> reload 8 server-side; enemy hits 9.02 (11 x 0.82)",
+   "method": "real mouse input, server reads"
+  },
+  {
+   "system": "loot",
+   "evidence": "container opens, items reveal by quality timer, click takes into backpack",
+   "method": "real F + GUI click"
+  },
+  {
+   "system": "items + melee",
+   "evidence": "bandage consumed on key 3; V switches to stick, swing sets MeleeAt",
+   "method": "real keys"
+  },
+  {
+   "system": "doors + construction",
+   "evidence": "door d0 opens on F hold 0.2 s; SmallBridge2 builds with 2 wood, debris/blocker removed",
+   "method": "real F, fixture gives wood"
+  },
+  {
+   "system": "extraction + death",
+   "evidence": "5 s on the pad -> EXTRACTED screen with banked items; death -> YOU DIED / Killed by Scrappy Goose / Redeploy",
+   "method": "real play"
+  },
+  {
+   "system": "vision",
+   "evidence": "enemies outside the 100 deg cone hidden, fan darkens the ground outside the cone, nameplates + HP bars on visible geese",
+   "method": "screen_capture"
+  },
+  {
+   "system": "inventory",
+   "evidence": "Tab opens backpack + equipment; AK-47 equips to Firearm 2; weight shown",
+   "method": "real Tab, remote + click"
+  },
+  {
+   "system": "barrels",
+   "evidence": "barrel hit turns orange at <=15 HP, explodes with VFX, leaves stump",
+   "method": "real mouse fire, screen_capture"
+  },
+  {
+   "system": "audio",
+   "evidence": "14 Creator Store SFX load (IsLoaded) and are wired to actions",
+   "method": "client read"
+  },
+  {
+   "system": "performance",
+   "evidence": "60 fps in Play with 33k map parts, ~40 geese, vision + fan (15 fps only when Studio is in the background)",
+   "method": "telemetry"
+  }
+ ],
+ "open": [
+  {
+   "gap": "multiplayer with 2+ clients not run",
+   "cause": "Studio's multi-client test session needs the ribbon player count (not reachable by automation)",
+   "next": "Test tab > Clients and Servers > 2 players > Start; code is per-player server state"
+  },
+  {
+   "gap": "half cover hit points (72 covers), breakable walls (dynamite), throwables/grenades",
+   "next": "port Breakables cover HP and Grenades"
+  },
+  {
+   "gap": "unported enemies: giant, operator; bloater/stormling/drone need rain/storm/night",
+   "next": "weather + night spawns"
+  },
+  {
+   "gap": "weather (always Sunny), storm phase, rain",
+   "next": "WeatherManager port"
+  },
+  {
+   "gap": "cave sub-scene, Storm Zone / Warehouse loaders, notes, beacon, fishing, campfire hazards, merchant, quest board",
+   "next": "later slice items"
+  },
+  {
+   "gap": "minimap (M), weapon/item icons in HUD and web-style reticle with ammo pips",
+   "next": "UI pass"
+  },
+  {
+   "gap": "AI uses PathfindingService, not the decoded navmesh; no AI grenades, healing or inter-faction fights",
+   "next": "compare behaviour, port navmesh A* if needed"
+  },
+  {
+   "gap": "wolverine uses a procedural trot (its quad skeleton is not ported)",
+   "next": "port the quad rig clips"
+  },
+  {
+   "gap": "BillboardGui labels (player names, EXTRACT/BUNKER) not visible in MCP captures",
+   "next": "check in a real client; switch to screen-projected labels if they do not render"
+  },
+  {
+   "gap": "audio ids are Creator Store community uploads",
+   "next": "replace with owned/licensed SFX before publishing"
+  },
+  {
+   "gap": "art: props are restyled collider blocks; grass, river surface, beaver/goose detail",
+   "next": "art pass per docs/art-brief.md"
+  }
+ ]
 }

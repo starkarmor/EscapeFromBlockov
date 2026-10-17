@@ -29,7 +29,7 @@ export type Target = {
 -- registered by Raid (players) and Enemies
 Weapons.targets = {} :: { [any]: Target }
 
-export type Bullet = { fromName: string?, bleed: number?, pos: Vector3, dir: Vector3, speed: number, left: number, half: number, travelled: number, team: number, damage: number, dmgOver: number, crit: boolean, critMul: number, from: Player?, fromRef: any }
+export type Bullet = { pen: number?, armorBreak: number?, fromName: string?, bleed: number?, pos: Vector3, dir: Vector3, speed: number, left: number, half: number, travelled: number, team: number, damage: number, dmgOver: number, crit: boolean, critMul: number, from: Player?, fromRef: any }
 local bullets: { Bullet } = {}
 
 local params = RaycastParams.new()
@@ -150,6 +150,8 @@ local function onFire(p: Player, muzzle: any, yaws: any, slope: any, head: any)
 			dmgOver = row.DmgOverDistance or 0.5,
 			crit = crit,
 			critMul = row.CritDamageFactor or 1,
+			pen = ammo and ammo.armorPen or 0,
+			armorBreak = ammo and ammo.armorBreak or 0.55,
 			from = p,
 			fromRef = p,
 		})
@@ -246,7 +248,7 @@ local function step(dt: number)
 			local at = a + (e - a) * u
 			local travelled = b.travelled + stepLen * u
 			local dmg = b.damage * (if travelled > b.half then b.dmgOver else 1) * (if b.crit then b.critMul else 1)
-			local killed = t.hurt(dmg, { from = b.from, fromRef = b.fromRef, fromName = b.fromName, bleed = b.bleed, crit = b.crit, dir = b.dir, at = at })
+			local killed = t.hurt(dmg, { pen = b.pen or 0, armorBreak = b.armorBreak or 0.55, from = b.from, fromRef = b.fromRef, fromName = b.fromName, bleed = b.bleed, crit = b.crit, dir = b.dir, at = at })
 			if b.from and b.from.Parent then
 				Net.event("Hit"):FireClient(b.from, killed, b.crit, at + Vector3.new(0, 1, 0), dmg)
 			end

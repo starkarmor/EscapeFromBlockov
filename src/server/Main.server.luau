@@ -15,4 +15,5 @@ if okL and Loot then
 	Loot.start()
 end
 require(script.Parent.Actions).start()
+require(script.Parent.Breakables).start()
 print("[Canuckov] server ready")

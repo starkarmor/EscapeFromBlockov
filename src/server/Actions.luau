@@ -129,10 +129,95 @@ end
 
 function Actions.start()
 	Net.event("SelectSlot").OnServerEvent:Connect(function(p, slot)
-		if slot == "gun" or slot == "melee" then
+		if slot == "gun" or slot == "gun2" or slot == "melee" then
 			Actions.cancelUse(p)
 			setHeld(p, slot)
+			if p.Character then
+				p.Character:SetAttribute("Held", if slot == "melee" then "melee" else "gun")
+			end
+			Weapons.syncAmmo(p)
 		end
+	end)
+	Net.event("Equip").OnServerEvent:Connect(function(p, index)
+		local r = Raid.raids[p]
+		if not r or not r.alive or typeof(index) ~= "number" then
+			return
+		end
+		local x = r :: any
+		local st = r.bag[index]
+		if not st then
+			return
+		end
+		local def = Items.items[st.id]
+		if not def then
+			return
+		end
+		local function take()
+			Raid.take(r.bag, st.id, 1)
+		end
+		if def.kind == "firearm" then
+			take()
+			local inst = { id = st.id, ammo = 0, dur = 100 }
+			if not r.gun then
+				r.gun = inst
+			elseif not x.gun2 then
+				x.gun2 = inst
+			else
+				local slot = if x.held == "gun2" then "gun2" else "gun"
+				local old = if slot == "gun2" then x.gun2 else r.gun
+				Raid.addItem(r.bag, old.id, 1)
+				if old.ammo > 0 then
+					Raid.addItem(r.bag, require(ReplicatedStorage.Shared.Guns).ammoOf(old.id) or "ammo_s_rusty", old.ammo)
+				end
+				if slot == "gun2" then x.gun2 = inst else r.gun = inst end
+			end
+		elseif def.kind == "armor" or def.kind == "helmet" then
+			take()
+			local key = def.kind
+			if x[key] then
+				Raid.addItem(r.bag, x[key].id, 1)
+			end
+			local g = def.gear or {}
+			x[key] = { id = st.id, armor = g.armor or g.headArmor or 0, dur = g.dur or 50 }
+		elseif def.kind == "melee" then
+			take()
+			Raid.addItem(r.bag, r.melee, 1)
+			r.melee = st.id
+		elseif def.use then
+			useItem(p, st.id)
+			return
+		else
+			return
+		end
+		Weapons.cancelReload(p)
+		Raid.syncVitals(p)
+		Raid.sendBag(p)
+		Weapons.syncAmmo(p)
+		Net.event("Toast"):FireClient(p, "Equipped " .. (def.name or st.id), "good")
+	end)
+	Net.event("Unequip").OnServerEvent:Connect(function(p, slot)
+		local r = Raid.raids[p]
+		if not r or not r.alive then
+			return
+		end
+		local x = r :: any
+		local key = if slot == "gun" or slot == "gun2" or slot == "armor" or slot == "helmet" then slot else nil
+		if not key then
+			return
+		end
+		local inst = if key == "gun" then r.gun else x[key]
+		if not inst then
+			return
+		end
+		Raid.addItem(r.bag, inst.id, 1)
+		if inst.ammo and inst.ammo > 0 then
+			Raid.addItem(r.bag, require(ReplicatedStorage.Shared.Guns).ammoOf(inst.id) or "ammo_s_rusty", inst.ammo)
+		end
+		if key == "gun" then r.gun = nil else x[key] = nil end
+		Weapons.cancelReload(p)
+		Raid.syncVitals(p)
+		Raid.sendBag(p)
+		Weapons.syncAmmo(p)
 	end)
 	Net.event("Melee").OnServerEvent:Connect(melee)
 	Net.event("UseItem").OnServerEvent:Connect(useItem)

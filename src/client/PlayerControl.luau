@@ -33,7 +33,10 @@ PC.triggerLock = 0
 PC.aim = Vector2.zero -- aim point on the plane (metres)
 PC.gun = nil :: any -- the held gun's raw gz_gunfeel row (Combat sets it)
 PC.held = "gun"
-PC.blocked = false -- a UI panel or an interaction owns input
+PC.slot = 1 -- 1 / 2 firearms, 3 melee (the HUD highlight)
+PC.blocked = false -- a UI panel owns input (loot window or inventory)
+PC.lootOpen = false
+PC.invOpen = false
 PC.actionMove = true -- the running action allows moving (reload yes, interact no)
 PC.actionRun = true
 PC.moveability = 1
@@ -88,6 +91,7 @@ function PC.update(dt: number, cursor: Vector2)
 		return
 	end
 	clock += dt
+	PC.blocked = PC.lootOpen or PC.invOpen
 	PC.meleeAnim = math.max(0, PC.meleeAnim - dt * 5)
 	local p = r.Position
 	PC.pos = Vector2.new(p.X / S, p.Z / S)

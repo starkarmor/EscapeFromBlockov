@@ -438,8 +438,20 @@ function Hud.update(dt: number)
 	-- weapon slots + ammo
 	local gid = player:GetAttribute("Gun")
 	local slots = refs.slots
-	slots[1].name.Text = if typeof(gid) == "string" and Guns.items[gid] then Guns.items[gid].name else ""
-	slots[3].name.Text = "Stick"
+	local eq: { [string]: string } = {}
+	local rawEq = player:GetAttribute("Equip")
+	if typeof(rawEq) == "string" then
+		for k, v in string.gmatch(rawEq, "(%w+)=([^,]*)") do
+			eq[k] = v
+		end
+	end
+	local function nameOf(id: string?): string
+		local def = id and id ~= "" and Guns.items[id]
+		return if def then def.name else ""
+	end
+	slots[1].name.Text = nameOf(eq.gun)
+	slots[2].name.Text = nameOf(eq.gun2)
+	slots[3].name.Text = nameOf(eq.melee)
 	table.clear(hotbar)
 	local counts = {}
 	for _, st in bagStacks() do
@@ -455,7 +467,7 @@ function Hud.update(dt: number)
 		slots[3 + k].name.Text = if def then string.format("%s\nx%d", def.name, counts[k]) else ""
 	end
 	for i, s in slots do
-		local active = (i == 1 and PC.held == "gun") or (i == 3 and PC.held == "melee")
+		local active = (i == (PC.slot or 1) and i <= 3)
 		local st = s.frame:FindFirstChildOfClass("UIStroke")
 		if st then
 			st.Color = if active then WHITE else INK

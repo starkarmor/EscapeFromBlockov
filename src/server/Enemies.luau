@@ -347,6 +347,7 @@ local function think(e: Enemy, dt: number, players: { { p: Player, pos: Vector2 
 		if e.state ~= "combat" then
 			e.state = "combat"
 			e.reactAt = now + e.def.reaction
+			e.model:SetAttribute("AlertAt", Workspace:GetServerTimeNow())
 		end
 		e.target = seen.p
 		e.lastSeen = seen.pos

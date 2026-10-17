@@ -77,6 +77,12 @@ local function tagFor(m: Model): Tag?
 	bb.Visible = false
 	bb.Parent = plateGui
 	t = { gui = bb, fill = fill, root = root }
+	m:GetAttributeChangedSignal("AlertAt"):Connect(function()
+		local kind = m:GetAttribute("Kind")
+		if kind ~= "wolf" then
+			require(script.Parent.Sfx).at("honk", root.Position / S, 35)
+		end
+	end)
 	tags[m] = t
 	return t
 end
