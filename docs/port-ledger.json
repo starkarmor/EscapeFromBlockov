@@ -1,0 +1,26 @@
+{
+  "updated": "2026-10-17",
+  "source": "EscapeFromCanuckov web build (../src), Ground Zero main scene",
+  "verified": [
+    {"system": "spawn", "evidence": "Studio telemetry: player at (126.72, 137.38) = Special/BunkerEntry", "method": "real play session, output log"},
+    {"system": "walk speed", "evidence": "telemetry spd=4.00 m/s while walking (Player.ts MOVE.walk 4)", "method": "real keyboard input, output log"},
+    {"system": "camera arm", "evidence": "camera height 37.4 m, FOV 23.5 (CameraRig: 45 m at 55 deg, +0.5)", "method": "telemetry"},
+    {"system": "gun ammo + reload", "evidence": "mag 8 -> 1 over shots, reload -> 8, server-owned", "method": "real mouse input, telemetry"},
+    {"system": "spawners + containers", "evidence": "34 geese spawned, 121 containers rolled by chance", "method": "server log"}
+  ],
+  "open": [
+    {"gap": "no visual comparison yet", "cause": "no screenshot access (Screen Recording / Studio MCP off)", "next": "matched spawn-view screenshots web vs Roblox"},
+    {"gap": "headshot crits", "cause": "client head-collider aim not ported", "next": "cursor ray vs enemy Head part -> crit flag, server validation"},
+    {"gap": "unported enemy kinds", "detail": "boss + contractors, wolf, giant, operator; bloater/stormling/drone need weather/night", "next": "boss rig + AI, quad wolf rig animation"},
+    {"gap": "construction sites (bridges, manhole, one-way gate) not blocking / not buildable", "next": "export notBuilt/built boxes, build interact with material cost"},
+    {"gap": "doors (11, 4 keyed) not built", "next": "door parts with swing + key items"},
+    {"gap": "fog of war / vision fan", "detail": "web hides enemies outside the 100 deg / 37 m view cone with LOS", "next": "client visibility via QSight rays + fan overlay"},
+    {"gap": "AI pathing uses PathfindingService, not the decoded navmesh", "next": "compare paths; port navmesh A* if behaviour differs"},
+    {"gap": "melee (stick, V), hotbar items (bandage etc.), throwables", "next": "port use actions and melee swing"},
+    {"gap": "needs drain, bleeding, armor, weight/overweight", "next": "port Player.ts drains and armor multiplier"},
+    {"gap": "storm, weather, day/night lighting", "next": "drive Lighting from the raid clock; storm countdown"},
+    {"gap": "cave sub-scene, Storm Zone / Warehouse loaders", "next": "out of slice scope; loaders show a toast"},
+    {"gap": "grass, river surface, props are restyled stand-ins", "next": "art pass per docs/art-brief.md"},
+    {"gap": "audio", "next": "all of it"}
+  ]
+}

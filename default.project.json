@@ -1,0 +1,95 @@
+{
+  "name": "EscapeFromCanuckov",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterJumpPower": 0,
+        "CharacterUseJumpPower": true,
+        "CameraMaxZoomDistance": 400,
+        "DevComputerMovementMode": "KeyboardMouse",
+        "DevComputerCameraMovementMode": "Classic"
+      },
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "MaterialService": {
+      "CanuckStuds": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Plastic",
+          "ColorMap": "rbxassetid://10509831729",
+          "NormalMap": "rbxassetid://10509831753",
+          "StudsPerTile": 2
+        }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "FilteringEnabled": true,
+        "StreamingEnabled": false,
+        "Gravity": 34.335
+      },
+      "GroundZero": {
+        "$path": "src/world/GroundZero.rbxmx"
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": "Future",
+        "ClockTime": 13,
+        "Brightness": 2.5,
+        "OutdoorAmbient": [
+          0.55,
+          0.55,
+          0.6
+        ],
+        "Ambient": [
+          0.35,
+          0.35,
+          0.4
+        ],
+        "GlobalShadows": true,
+        "EnvironmentDiffuseScale": 1,
+        "EnvironmentSpecularScale": 0.4
+      },
+      "Atmosphere": {
+        "$className": "Atmosphere",
+        "$properties": {
+          "Density": 0.25,
+          "Offset": 0.1,
+          "Color": [
+            0.78,
+            0.9,
+            1.0
+          ],
+          "Decay": [
+            0.6,
+            0.75,
+            0.95
+          ],
+          "Glare": 0,
+          "Haze": 0.5
+        }
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
