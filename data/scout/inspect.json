@@ -1,0 +1,310 @@
+{
+ "127406876486021": {
+  "cat": "weapons",
+  "name": "Low Poly Gun Pack Assault Rifle Pistol Mesh",
+  "creator": "BlazeEagleNinja9014",
+  "insert": "{\"insertGuid\":\"5dad8909-54dc-4cfd-8b02-da62b0da788b\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_127406876486021\",\"name\":\"A_127406876486021\"",
+  "inspect": "class=Folder parts=331 meshes=326 unions=5 tex=0 size=(0.0,0.0,0.0) scripts=[Script:Material(10862),LocalScript:LocalScript(265)] flags=[]"
+ },
+ "99363602592974": {
+  "cat": "weapons",
+  "name": "\ud83d\udd2b Low Poly Gun Pack Weapon Shooter Firearm FPS Ki",
+  "creator": "Lion375Alpha",
+  "insert": "{\"insertGuid\":\"f3212eda-c7ee-45d2-97c9-9809c2c93ff5\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_99363602592974\",\"name\":\"A_99363602592974\",\"",
+  "inspect": "class=Model parts=826 meshes=802 unions=4 tex=1 size=(52.3,40.0,18.0) scripts=[Script:PoseTexture(13052),ModuleScript:TextureConfiguration(9635)] flags=[]"
+ },
+ "4762550889": {
+  "cat": "weapons",
+  "name": "Improved Low-Poly AK47 (Does not work)",
+  "creator": "ManBehind_U",
+  "insert": "{\"insertGuid\":\"b617755c-3ea7-4156-9d7c-6eae1da2f555\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_4762550889\",\"name\":\"A_4762550889\",\"classNam",
+  "inspect": "class=Model parts=20 meshes=0 unions=2 tex=0 size=(0.4,2.0,5.3) scripts=[] flags=[]"
+ },
+ "15284785812": {
+  "cat": "weapons",
+  "name": "Blocky Gun!",
+  "creator": "Idea_0d",
+  "insert": "{\"insertGuid\":\"81238aaf-7bbc-482f-b3c0-ccefcabb677a\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_15284785812\",\"name\":\"A_15284785812\",\"classN",
+  "inspect": "class=Model parts=34 meshes=0 unions=0 tex=0 size=(0.6,1.5,2.5) scripts=[] flags=[]"
+ },
+ "102599014388952": {
+  "cat": "weapons",
+  "name": "Low Poly Shotgun",
+  "creator": "SUPERMEOWguys",
+  "insert": "{\"insertGuid\":\"a1c9e938-7bb7-49ef-8997-5e12c2c74775\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_102599014388952\",\"name\":\"A_102599014388952\"",
+  "inspect": "class=Model parts=1 meshes=0 unions=1 tex=0 size=(3.2,0.4,1.1) scripts=[] flags=[]"
+ },
+ "6169371009": {
+  "cat": "weapons",
+  "name": "MAC10",
+  "creator": "ouraneox",
+  "insert": "{\"insertGuid\":\"908c5999-a252-4dfa-be2e-e22aa1b0b8d1\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_6169371009\",\"name\":\"A_6169371009\",\"classNam",
+  "inspect": "class=Model parts=73 meshes=0 unions=1 tex=0 size=(1.0,7.3,10.7) scripts=[] flags=[]"
+ },
+ "10176497750": {
+  "cat": "weapons",
+  "name": "Low poly sniper rifle",
+  "creator": "Ashaneron",
+  "insert": "{\"insertGuid\":\"b0cdcf7c-3612-4368-98f3-d95769481248\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_10176497750\",\"name\":\"A_10176497750\",\"classN",
+  "inspect": "class=Model parts=8 meshes=8 unions=0 tex=0 size=(1.5,3.6,13.1) scripts=[Script:READ ME(115)] flags=[]"
+ },
+ "106991110510862": {
+  "cat": "weapons",
+  "name": "\u26be Pixel Baseball Bat Low Poly Weapon Prop Sport",
+  "creator": "Xz_CookieXZStaraZPul",
+  "insert": "{\"insertGuid\":\"51d6d801-f922-4144-84b3-0d30c121035e\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_106991110510862\",\"name\":\"A_106991110510862\"",
+  "inspect": "class=Model parts=22 meshes=0 unions=0 tex=0 size=(3.4,0.5,0.5) scripts=[Script:PoseTexture(13510),ModuleScript:TextureConfiguration(9952)] flags=[]"
+ },
+ "13759819215": {
+  "cat": "weapons",
+  "name": "mega low poly grenade",
+  "creator": "slddoeld",
+  "insert": "{\"insertGuid\":\"6e74dbe7-0605-47a7-810a-e9e4a0fb3025\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_13759819215\",\"name\":\"A_13759819215\",\"classN",
+  "inspect": "class=Model parts=1 meshes=1 unions=0 tex=0 size=(0.7,0.7,0.7) scripts=[] flags=[]"
+ },
+ "126241575108167": {
+  "cat": "weapons",
+  "name": "Kitchen Knife Mesh Low Poly Clean Mesh Summer Part",
+  "creator": "Spar_kVenom",
+  "insert": "{\"insertGuid\":\"23da2f13-5031-48cb-8eb5-50d160e41741\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_126241575108167\",\"name\":\"A_126241575108167\"",
+  "inspect": "class=Model parts=1 meshes=0 unions=0 tex=0 size=(2.0,0.2,2.0) scripts=[Script:PoseTexture(13510),ModuleScript:TextureConfiguration(9952)] flags=[]"
+ },
+ "610672667": {
+  "cat": "characters",
+  "name": "beaver!",
+  "creator": "iiXenix",
+  "insert": "{\"insertGuid\":\"c439ab18-2b19-499f-aa79-eacc90079fc5\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_610672667\",\"name\":\"A_610672667\",\"className\"",
+  "inspect": "class=Model parts=41 meshes=0 unions=1 tex=0 size=(2.5,1.8,1.5) scripts=[] flags=[]"
+ },
+ "15925666984": {
+  "cat": "characters",
+  "name": "beaver",
+  "creator": "critical_bon",
+  "insert": "{\"insertGuid\":\"8c0ffaf1-1f82-4043-984e-d0aff9856cd5\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_15925666984\",\"name\":\"A_15925666984\",\"classN",
+  "inspect": "class=Model parts=1 meshes=0 unions=0 tex=0 size=(25.9,12.2,24.4) scripts=[] flags=[]"
+ },
+ "10647998996": {
+  "cat": "characters",
+  "name": "Goose",
+  "creator": "Challenger0201",
+  "insert": "{\"insertGuid\":\"823e8373-a71b-41c8-81cf-1f44af699a0f\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_10647998996\",\"name\":\"A_10647998996\",\"classN",
+  "inspect": "class=Model parts=50 meshes=0 unions=0 tex=0 size=(4.0,4.2,4.9) scripts=[Script:Script(1148),Script:Script(178),Script:Respawn(2809),Script:Sound(4299),Script:Animate(13394),Script:Wonder(188)] flags=[]"
+ },
+ "5214541892": {
+  "cat": "characters",
+  "name": "Goose",
+  "creator": "The_Deceiver",
+  "insert": "{\"insertGuid\":\"e0885eb5-11aa-4362-82db-b8201969b7f8\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_5214541892\",\"name\":\"A_5214541892\",\"classNam",
+  "inspect": "class=Model parts=13 meshes=0 unions=0 tex=0 size=(1.9,3.1,3.0) scripts=[] flags=[]"
+ },
+ "481151177": {
+  "cat": "characters",
+  "name": "Canada Goose",
+  "creator": "VxnillaMuffin",
+  "insert": "{\"insertGuid\":\"6f0fef92-46a9-4e14-87b3-b9b8a6499e2d\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_481151177\",\"name\":\"A_481151177\",\"className\"",
+  "inspect": "class=Model parts=87 meshes=0 unions=0 tex=0 size=(9.0,8.8,3.0) scripts=[] flags=[]"
+ },
+ "130531510": {
+  "cat": "characters",
+  "name": "Moose",
+  "creator": "sixqiu",
+  "insert": "{\"insertGuid\":\"a522c505-243e-4210-91f8-7c12bc68d468\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_130531510\",\"name\":\"A_130531510\",\"className\"",
+  "inspect": "class=Model parts=14 meshes=0 unions=0 tex=0 size=(7.9,7.1,3.0) scripts=[] flags=[]"
+ },
+ "106089670751518": {
+  "cat": "characters",
+  "name": "\ud83d\udc3b 99 Nights Forest Bear Plushie Cabin Decor Woods",
+  "creator": "S3bastianEpicLight73",
+  "insert": "{\"insertGuid\":\"e5ce2e51-6b61-4d02-a53d-a38f7dd533ba\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_106089670751518\",\"name\":\"A_106089670751518\"",
+  "inspect": "class=Model parts=17 meshes=0 unions=4 tex=0 size=(3.5,5.5,8.5) scripts=[Script:Main(29897),Script:LightConfig(7087),ModuleScript:Type(6783),ModuleScript:EasyConfiguration(4501)] flags=[Type:MarketplaceService]"
+ },
+ "5409485582": {
+  "cat": "characters",
+  "name": "Outrageously Ridiculously Comedic Cartoon Bear",
+  "creator": "DylanDaDIamond",
+  "insert": "{\"insertGuid\":\"07c3897a-149b-45db-88a7-245e78cead6a\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_5409485582\",\"name\":\"A_5409485582\",\"classNam",
+  "inspect": "class=Model parts=14 meshes=0 unions=0 tex=0 size=(8.7,12.7,17.5) scripts=[] flags=[]"
+ },
+ "440929613": {
+  "cat": "characters",
+  "name": "low poly wolf",
+  "creator": "RohninCode",
+  "insert": "{\"insertGuid\":\"87dddb1d-6a0e-4d5e-9ff7-e44504870310\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_440929613\",\"name\":\"A_440929613\",\"className\"",
+  "inspect": "class=Model parts=1 meshes=1 unions=0 tex=0 size=(5.9,14.7,20.6) scripts=[] flags=[]"
+ },
+ "87952762503596": {
+  "cat": "characters",
+  "name": "eacoon",
+  "creator": "Hdhdgdgdg173",
+  "insert": "{\"insertGuid\":\"b7bdb82c-d740-4b3d-8c7a-7aa7a80307b8\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_87952762503596\",\"name\":\"A_87952762503596\",\"",
+  "inspect": "class=Model parts=1 meshes=1 unions=0 tex=0 size=(0.4,0.7,0.6) scripts=[] flags=[]"
+ },
+ "90921659942122": {
+  "cat": "characters",
+  "name": "Blocky animals (by raged >:))",
+  "creator": "pookiebear29315",
+  "insert": "{\"insertGuid\":\"af2467ca-847a-4181-b39b-6dbcfe455ad2\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_90921659942122\",\"name\":\"A_90921659942122\",\"",
+  "inspect": "class=Model parts=263 meshes=1 unions=0 tex=1 size=(28.1,8.6,10.5) scripts=[] flags=[]"
+ },
+ "103047824825465": {
+  "cat": "environment",
+  "name": "\ud83c\udf33 low poly Pine tree cartoon terrain tree",
+  "creator": "Roblox Asset Vault",
+  "insert": "{\"insertGuid\":\"1471c6f6-e2b7-45b8-ab77-276fbf59a8d3\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_103047824825465\",\"name\":\"A_103047824825465\"",
+  "inspect": "class=Model parts=2 meshes=2 unions=0 tex=0 size=(22.4,48.6,24.2) scripts=[Script:EffectBuilder(4712)] flags=[]"
+ },
+ "5616880673": {
+  "cat": "environment",
+  "name": "Low poly pine tree",
+  "creator": "smartycar23",
+  "insert": "{\"insertGuid\":\"258e02de-533e-4be0-a833-f117feefe3c1\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_5616880673\",\"name\":\"A_5616880673\",\"classNam",
+  "inspect": "class=Model parts=2 meshes=2 unions=0 tex=0 size=(25.2,45.1,25.2) scripts=[] flags=[]"
+ },
+ "1213327466": {
+  "cat": "environment",
+  "name": "Maple Tree [Lumber Tycoon 2]",
+  "creator": "RenkRBLX",
+  "insert": "{\"insertGuid\":\"b1af7b9c-5d3e-4a0e-8850-ab3b9ceb00f6\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_1213327466\",\"name\":\"A_1213327466\",\"classNam",
+  "inspect": "class=Model parts=29 meshes=0 unions=0 tex=0 size=(31.6,31.9,29.4) scripts=[] flags=[]"
+ },
+ "7191673673": {
+  "cat": "environment",
+  "name": "Low Poly Bush",
+  "creator": "ChickenNuggets2go",
+  "insert": "{\"insertGuid\":\"0cb6465a-9e17-4844-bd81-e11736320091\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_7191673673\",\"name\":\"A_7191673673\",\"classNam",
+  "inspect": "class=Model parts=1 meshes=1 unions=0 tex=0 size=(10.3,4.8,7.9) scripts=[] flags=[]"
+ },
+ "121683951170092": {
+  "cat": "environment",
+  "name": "Low Poly Mountain Rock Cave Desert Hill",
+  "creator": "LavaDancerMoon",
+  "insert": "{\"insertGuid\":\"c220f377-a468-48c0-a943-09599db9f0d7\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_121683951170092\",\"name\":\"A_121683951170092\"",
+  "inspect": "class=Model parts=1 meshes=1 unions=0 tex=0 size=(5.3,2.5,5.2) scripts=[] flags=[]"
+ },
+ "135349084762380": {
+  "cat": "environment",
+  "name": "\u26f0\ufe0f Low Poly Terrain Wall Rock Cliff Edge",
+  "creator": "Rocke_t449Moon1394",
+  "insert": "{\"insertGuid\":\"90aa0a9e-63ab-4815-9ba1-a99c3ba95aad\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_135349084762380\",\"name\":\"A_135349084762380\"",
+  "inspect": "class=Model parts=6 meshes=6 unions=0 tex=0 size=(77.4,42.5,35.3) scripts=[Script:PoseTexture(13510),ModuleScript:TextureConfiguration(9952)] flags=[]"
+ },
+ "4746497269": {
+  "cat": "environment",
+  "name": "Log Cabin",
+  "creator": "uhhhh17",
+  "insert": "{\"insertGuid\":\"cb572151-7da2-48ca-9e12-d4b9e3c9c3bd\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_4746497269\",\"name\":\"A_4746497269\",\"classNam",
+  "inspect": "class=Model parts=266 meshes=0 unions=3 tex=0 size=(23.1,15.9,30.9) scripts=[] flags=[]"
+ },
+ "72105624698726": {
+  "cat": "environment",
+  "name": "\ud83c\udf32 Forest Tower Nature Tree House Log Cabin",
+  "creator": "FierceCobra467",
+  "insert": "{\"insertGuid\":\"620ca84b-cf00-4281-a69e-dba5ee0b903e\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_72105624698726\",\"name\":\"A_72105624698726\",\"",
+  "inspect": "class=Model parts=83 meshes=0 unions=1 tex=0 size=(11.2,25.3,10.2) scripts=[Script:PoseLink(13595)] flags=[]"
+ },
+ "134223238872685": {
+  "cat": "environment",
+  "name": "Low Poly Wooden Fence Wood Plank Barrier",
+  "creator": "MasonCraft8709",
+  "insert": "{\"insertGuid\":\"6e8fb96c-7287-4685-97fe-8aa6f8bb2f13\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_134223238872685\",\"name\":\"A_134223238872685\"",
+  "inspect": "class=Model parts=1 meshes=1 unions=0 tex=0 size=(11.9,5.0,1.4) scripts=[Script:Material(10862),LocalScript:LocalScript(265)] flags=[]"
+ },
+ "8473839456": {
+  "cat": "environment",
+  "name": "shipping container",
+  "creator": "StrikerEtte",
+  "insert": "{\"insertGuid\":\"feec48ae-b5c3-459f-b4cd-487d77f0609e\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_8473839456\",\"name\":\"A_8473839456\",\"classNam",
+  "inspect": "class=Model parts=2 meshes=2 unions=0 tex=0 size=(11.2,11.0,39.0) scripts=[] flags=[]"
+ },
+ "13106047107": {
+  "cat": "environment",
+  "name": "Low-poly Pickup Truck",
+  "creator": "xX2AutxmN_T332Xx",
+  "insert": "{\"insertGuid\":\"5e973634-1b1b-4772-bcc5-348ea7a24638\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_13106047107\",\"name\":\"A_13106047107\",\"classN",
+  "inspect": "class=Model parts=9 meshes=0 unions=2 tex=4 size=(9.4,7.0,19.2) scripts=[] flags=[]"
+ },
+ "113700576399250": {
+  "cat": "environment",
+  "name": "Low Poly Cars",
+  "creator": "Dandan042899",
+  "insert": "{\"insertGuid\":\"1830303a-c10a-4f66-baa6-abc5cbe3c2eb\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_113700576399250\",\"name\":\"A_113700576399250\"",
+  "inspect": "class=Folder parts=13 meshes=7 unions=0 tex=0 size=(0.0,0.0,0.0) scripts=[] flags=[]"
+ },
+ "5228772587": {
+  "cat": "environment",
+  "name": "Oil barrel",
+  "creator": "makdonovich",
+  "insert": "{\"insertGuid\":\"a8f8be66-2e22-4e23-9c0e-55a842f45c49\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_5228772587\",\"name\":\"A_5228772587\",\"classNam",
+  "inspect": "class=Model parts=7 meshes=0 unions=0 tex=1 size=(3.4,4.3,3.4) scripts=[] flags=[]"
+ },
+ "138288398183601": {
+  "cat": "environment",
+  "name": "Low Poly Wooden Crates Box Wood Stackable",
+  "creator": "AceNeon1090",
+  "insert": "{\"insertGuid\":\"0e5c581b-cc9c-4f4c-8109-4f1560f5539d\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_138288398183601\",\"name\":\"A_138288398183601\"",
+  "inspect": "class=Model parts=81 meshes=81 unions=0 tex=0 size=(9.4,9.1,5.9) scripts=[Script:LightConfig(7087),ModuleScript:EasyConfiguration(4501),ModuleScript:Type(6783)] flags=[Type:MarketplaceService]"
+ },
+ "127425714970796": {
+  "cat": "environment",
+  "name": "\ud83d\udd25 Low Poly Campfire Bonfire Firepit Logs Camping",
+  "creator": "SamuelLight39374",
+  "insert": "{\"insertGuid\":\"dbce81ad-eb4d-48d5-9492-2da33de12ed9\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_127425714970796\",\"name\":\"A_127425714970796\"",
+  "inspect": "class=Folder parts=30 meshes=4 unions=20 tex=0 size=(0.0,0.0,0.0) scripts=[Script:LightConfig(7087),ModuleScript:Type(6783),ModuleScript:EasyConfiguration(4501)] flags=[Type:MarketplaceService]"
+ },
+ "105266050548778": {
+  "cat": "environment",
+  "name": "Low  Poly Camp Tent Campfire Campsite Simple",
+  "creator": "Nathan738Spark5075",
+  "insert": "{\"insertGuid\":\"c3d47262-7f83-4f25-a975-a8ff8039dfc4\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_105266050548778\",\"name\":\"A_105266050548778\"",
+  "inspect": "class=Model parts=10 meshes=10 unions=0 tex=0 size=(18.0,8.1,25.8) scripts=[Script:Package(13612),ModuleScript:TextureConfiguration(9632)] flags=[]"
+ },
+ "82010036400929": {
+  "cat": "environment",
+  "name": "Medieval Wooden Bridge Low Poly Wood Path",
+  "creator": "NeonDgThunderY",
+  "insert": "{\"insertGuid\":\"79af0a1d-582f-400c-87ca-e16aef934c37\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_82010036400929\",\"name\":\"A_82010036400929\",\"",
+  "inspect": "class=Model parts=1 meshes=1 unions=0 tex=0 size=(20.0,6.1,7.8) scripts=[Script:LightConfig(7087),ModuleScript:Type(6783),ModuleScript:EasyConfiguration(4501)] flags=[Type:MarketplaceService]"
+ },
+ "119562756216506": {
+  "cat": "environment",
+  "name": "\ud83d\udeaa Hatch Door Metal Round Sci-Fi Bunker Entrance",
+  "creator": "GalaxyNovaL3g3nd66",
+  "insert": "{\"insertGuid\":\"d3271bc9-0c79-4e70-be6c-a32bc6ba251c\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_119562756216506\",\"name\":\"A_119562756216506\"",
+  "inspect": "class=Model parts=35 meshes=0 unions=0 tex=0 size=(7.0,2.0,7.5) scripts=[Script:Script(3776),Script:Script(1212),Script:Script(619),Script:CoreSkyboxSystem(8400)] flags=[]"
+ },
+ "18586420099": {
+  "cat": "environment",
+  "name": "Canada Flag",
+  "creator": "AfterCorl",
+  "insert": "{\"insertGuid\":\"7864180f-5260-4b88-af56-974b36343803\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_18586420099\",\"name\":\"A_18586420099\",\"classN",
+  "inspect": "class=Model parts=43 meshes=32 unions=0 tex=0 size=(6.0,43.8,15.7) scripts=[Script:Animate(241)] flags=[]"
+ },
+ "87392862973649": {
+  "cat": "environment",
+  "name": "\ud83d\udee1\ufe0f War Bunker Fort Sandbag Military Defense Cover",
+  "creator": "LavaLKAquaZ87",
+  "insert": "{\"insertGuid\":\"f3e7211e-2c9c-4437-b9fb-dd31cf6e4b8c\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_87392862973649\",\"name\":\"A_87392862973649\",\"",
+  "inspect": "class=Model parts=31 meshes=0 unions=0 tex=0 size=(15.1,5.7,15.2) scripts=[Script:CoreSkyboxSystem(12018),Script:CoreTextureSystem(0),Script:Protocol(0),Script:PoseLink(13595)] flags=[]"
+ },
+ "91195860309114": {
+  "cat": "environment",
+  "name": "old western water tower wild west town props",
+  "creator": "AidenBlastVoid2016",
+  "insert": "{\"insertGuid\":\"49674ac8-84dd-46e1-9011-94e11c688631\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_91195860309114\",\"name\":\"A_91195860309114\",\"",
+  "inspect": "class=Model parts=5 meshes=0 unions=4 tex=0 size=(27.1,26.5,13.4) scripts=[Script:CoreSkyboxSystem(8400)] flags=[]"
+ },
+ "12325172605": {
+  "cat": "environment",
+  "name": "Shrek's Outhouse",
+  "creator": "GamerTOAST999",
+  "insert": "{\"insertGuid\":\"d2da03fc-4b46-47d0-939e-036882b81953\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_12325172605\",\"name\":\"A_12325172605\",\"classN",
+  "inspect": "class=Model parts=73 meshes=1 unions=1 tex=0 size=(11.8,18.7,10.6) scripts=[] flags=[]"
+ },
+ "8788183000": {
+  "cat": "environment",
+  "name": "radio tower",
+  "creator": "meryless",
+  "insert": "{\"insertGuid\":\"835b25ca-13b1-409e-9dc5-89ed716c7fba\",\"insertedInstances\":[{\"fullPath\":\"game.ServerStorage.ScoutTmp.A_8788183000\",\"name\":\"A_8788183000\",\"classNam",
+  "inspect": "class=Model parts=1 meshes=1 unions=0 tex=0 size=(32.4,120.7,29.5) scripts=[] flags=[]"
+ }
+}
