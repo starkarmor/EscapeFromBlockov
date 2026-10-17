@@ -42,6 +42,18 @@ Config.Shake = {
 	explosion = { dur = 1, keys = { { 0, -1.4, -7.9, -7.9 }, { 0.27, 0.78, 23.4, 23.4 }, { 0.54, -0.12, 22.6, 22.6 }, { 0.75, 0.042, 9.23, 9.23 }, { 0.9, -0.02, 5.8, 5.8 }, { 0.95, -0.006, -3, -3 }, { 1, 0, 0, 0 } } },
 }
 
+-- CameraVolumes (gz_volumes.json level14, our frame x = wx - 329, z = -(wz - 241)); hide = off in Motion Sickness mode.
+-- Blend: t = 1 - (d / blend)^2 outside the sphere, pitch eases 5/s, yaw and distance 2/s.
+Config.CameraVolumes = {
+	{ x = 221.193 - 329, z = -(304.179 - 241), sphere = 10, blend = 10, pitch = 19.58, yaw = -7.8, distance = 35 },
+	{ x = 453.363 - 329, z = -(103.589 - 241), sphere = 6, blend = 8, pitch = 25, yaw = -45, distance = 35 },
+	{ x = 322.743 - 329, z = -(192.869 - 241), sphere = 10, blend = 10, pitch = 12, yaw = -8, distance = 35 },
+	{ x = 322.393 - 329, z = -(182.739 - 241), sphere = 10, blend = 10, pitch = 12, yaw = -8, distance = 35 },
+	{ x = 346.023 - 329, z = -(231.929 - 241), sphere = 4, blend = 8.15, pitch = 9.2, yaw = 52.2, distance = 34.83 },
+}
+-- data.ts WEIGHT_BANDS / BASE_CARRY_KG, STARVE, THIRST
+Config.Weight = { carry = 45, light = 0.25, lightSpeed = 0.15, heavy = 0.75, heavySpeed = -0.4, over = 1, overSpeed = -1, starveSpeed = -0.1, thirstMoveability = -0.2 }
+
 -- World.ts VIEW (fog of war), night multipliers
 Config.View = { angle = 100, dist = 37, bubble = 1.5, eye = 1.25, nightMul = { 0.4, 0.4, 0.5 } }
 
@@ -149,53 +161,45 @@ export type EnemyDef = {
 	patrolRange: number,
 	combatMoveRange: number,
 	combatMoveTime: { number },
-	melee: boolean,
+	melee: any,
 	weapons: { { any } },
+	team: number,
+	turnPatrol: number,
+	turnCombat: number,
+	mv: number?,
 	hitRadius: number,
 	exp: number,
 }
 Config.Enemies = {} :: { [string]: EnemyDef }
-Config.Enemies.scrapper = {
-	kind = "scrapper",
-	name = "Scrappy Goose",
-	rig = "scrapper",
-	hp = 35,
-	dmgMul = 0.82,
-	sight = 15,
-	sightAngle = 100,
-	reaction = 0.65,
-	shootDelay = 0.35,
-	shootTime = { 0.2, 0.5 },
-	shootGap = { 1.0, 1.5 },
-	walk = 4,
-	run = 6,
-	scatterMul = 0.65,
-	bulletSpeedMul = 0.65,
-	forget = 8,
-	patrolRange = 8,
-	combatMoveRange = 8,
-	combatMoveTime = { 1, 3 },
-	melee = false,
-	weapons = { { "tt33", 0.3846 }, { "tt33", 0.3846 }, { "tt33", 0.2308 } }, -- pm / toz66 map to tt33 until their gunfeel rows are generated
-	hitRadius = 0.5,
-	exp = 15,
-}
-Config.Enemies.scav = table.clone(Config.Enemies.scrapper)
-Config.Enemies.scav.kind = "scav"
-Config.Enemies.scav.name = "Honker"
-Config.Enemies.scav.rig = "scav"
-Config.Enemies.scav.hp = 45
-Config.Enemies.scav.dmgMul = 0.9
-Config.Enemies.scav.bulletSpeedMul = 0.75
-Config.Enemies.brute = table.clone(Config.Enemies.scrapper)
-Config.Enemies.brute.kind = "brute"
-Config.Enemies.brute.name = "Moose Brute"
-Config.Enemies.brute.rig = "brute"
-Config.Enemies.brute.hp = 60
-Config.Enemies.brute.walk = 4 * 1.15
-Config.Enemies.brute.run = 6 * 1.15
-Config.Enemies.brute.melee = true
-Config.Enemies.brute.forget = 7
+-- src/entities/Enemy.ts ENEMY_DEFS (sight m, sightAngle deg, reaction s, shootTime = burst, shootGap = gap, walk/run = mv(k))
+local function def(t: any): EnemyDef
+	t.walk = 4 * (t.mv or 1)
+	t.run = 6 * (t.mv or 1)
+	t.hitRadius = t.hitRadius or 0.5
+	t.melee = t.melee or false
+	t.exp = t.exp or 15
+	t.turnPatrol = t.turnPatrol or 400
+	t.turnCombat = t.turnCombat or 1200
+	return t
+end
+Config.Enemies.scrapper = def({ kind = "scrapper", name = "Scrappy Goose", rig = "scrapper", hp = 35, dmgMul = 0.82, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
+	shootTime = { 0.2, 0.5 }, shootGap = { 1.0, 1.5 }, scatterMul = 0.65, bulletSpeedMul = 0.65, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 },
+	weapons = { { "toz66", 15 }, { "tt33", 25 }, { "pm", 25 } }, team = 1 })
+Config.Enemies.scav = def({ kind = "scav", name = "Honker", rig = "scav", hp = 45, dmgMul = 0.9, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
+	shootTime = { 0.2, 0.5 }, shootGap = { 1.1, 1.8 }, scatterMul = 0.65, bulletSpeedMul = 0.75, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 },
+	weapons = { { "shotgun_homemade", 10 }, { "mp155", 10 }, { "g17", 10 }, { "bow", 3 }, { "ak47", 5 }, { "ak103", 1 }, { "ak74u", 8 }, { "adar", 4 } }, team = 1 })
+Config.Enemies.brute = def({ kind = "brute", name = "Moose Brute", rig = "brute", hp = 60, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 1.0, shootDelay = 0.2, mv = 1.15,
+	shootTime = { 0.3, 0.75 }, shootGap = { 0.5, 1.5 }, scatterMul = 0.35, bulletSpeedMul = 0.75, forget = 8, patrolRange = 8, combatMoveRange = 3.5, combatMoveTime = { 1, 3 },
+	weapons = {}, melee = { damage = 27, range = 1.55, interval = 1 / 2.2, bleed = 0.5, critRate = 0.2, critMul = 1.6 }, team = 1 })
+Config.Enemies.contractor = def({ kind = "contractor", name = "Elite Contract Goose", rig = "contractor", hp = 60, dmgMul = 1, sight = 16, sightAngle = 100, reaction = 0.55, shootDelay = 0.25,
+	shootTime = { 0.4, 0.8 }, shootGap = { 0.8, 2.2 }, scatterMul = 0.5, bulletSpeedMul = 1, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
+	weapons = { { "m4a1", 10 }, { "mp7", 8 }, { "ump45", 8 }, { "mp155", 8 }, { "mp5", 10 }, { "vector", 8 } }, team = 3 })
+Config.Enemies.boss = def({ kind = "boss", name = "Black Bear Warlord", rig = "boss", hp = 160, dmgMul = 1, sight = 17, sightAngle = 140, reaction = 0.45, shootDelay = 0.15,
+	shootTime = { 1, 2 }, shootGap = { 1.3, 2.3 }, scatterMul = 0.4, bulletSpeedMul = 0.9, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
+	weapons = { { "ak47", 1 } }, hitRadius = 0.7, team = 3, exp = 100 })
+Config.Enemies.wolf = def({ kind = "wolf", name = "Wolverine", rig = "wolf", hp = 40, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 0.2, shootDelay = 0.2, mv = 1.3,
+	shootTime = { 0.2, 0.2 }, shootGap = { 0, 0 }, scatterMul = 0.35, bulletSpeedMul = 1, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
+	weapons = {}, melee = { damage = 25, range = 2, interval = 1 / 1.3, bleed = 0.5, critRate = 0.15, critMul = 1.15 }, hitRadius = 0.65, team = 8 })
 
 -- Enemy AI limits (Enemy.ts AI const)
 Config.AI = { trackRange = 20, meleeTrackRange = 24, activeDistance = 50, alertSightMul = 1.25, reacquireSightMul = 1.5, lostWait = 0.25 }

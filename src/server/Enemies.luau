@@ -147,11 +147,23 @@ function Enemies.spawn(kind: string, x: number, z: number): Enemy
 	model:SetAttribute("HP", def.hp)
 	model:SetAttribute("MaxHP", def.hp)
 	model:SetAttribute("Held", if def.melee then "melee" else "gun")
+	model:SetAttribute("Kind", def.kind)
 	model:PivotTo(CFrame.new(x * S, RigBuilder.ROOT_R + 0.2, z * S))
 	model.Parent = folder
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 	root:SetNetworkOwner(nil)
-	local pick = def.weapons[math.random(1, #def.weapons)]
+	local total, pick = 0, nil
+	for _, w in def.weapons do
+		total += w[2]
+	end
+	local roll = math.random() * total
+	for _, w in def.weapons do
+		roll -= w[2]
+		if roll <= 0 then
+			pick = w
+			break
+		end
+	end
 	local e: Enemy = {
 		id = nextId,
 		def = def,
@@ -291,6 +303,8 @@ local function shoot(e: Enemy, at: Vector2)
 			critMul = 1,
 			from = nil,
 			fromRef = e,
+			fromName = e.def.name,
+			bleed = 0.03,
 		})
 	end
 	for _, pl in Players:GetPlayers() do
@@ -342,7 +356,7 @@ local function think(e: Enemy, dt: number, players: { { p: Player, pos: Vector2 
 	if e.state == "combat" then
 		local tp = e.lastSeen or p
 		local want = math.atan2(tp.X - p.X, tp.Y - p.Y)
-		face(e, want, dt, Config.Move.aimTurn)
+		face(e, want, dt, e.def.turnCombat)
 		if not seen and now - e.lastSeenAt > e.def.forget then
 			e.state = "patrol"
 			e.target = nil
@@ -352,18 +366,20 @@ local function think(e: Enemy, dt: number, players: { { p: Player, pos: Vector2 
 		if e.def.melee then
 			-- chase and swing (ButcherKnife: 27 dmg, 2.2 / s, range 1.55)
 			local d = (tp - p).Magnitude
-			if d > 1.3 then
+			local m = e.def.melee
+			if d > m.range * 0.85 then
 				moveToward(e, tp, e.def.run, dt)
 			else
 				stop(e)
 				if now >= e.meleeCd and seen then
-					e.meleeCd = now + 1 / 2.2
+					e.meleeCd = now + m.interval
 					e.model:SetAttribute("MeleeAt", Workspace:GetServerTimeNow())
 					task.delay(0.12, function()
 						if e.state ~= "dead" and seen and Raid.raids[seen.p] then
 							local np = Raid.posOf(seen.p)
-							if np and (Vector2.new(np.X, np.Z) - pos2(e)).Magnitude <= 1.55 + 0.5 then
-								Raid.hurt(seen.p, 27 * e.def.dmgMul, { fromName = e.def.name })
+							if np and (Vector2.new(np.X, np.Z) - pos2(e)).Magnitude <= m.range + 0.5 then
+								local crit = math.random() < m.critRate
+								Raid.hurt(seen.p, m.damage * e.def.dmgMul * (if crit then m.critMul else 1), { fromName = e.def.name, bleed = m.bleed })
 							end
 						end
 					end)
@@ -397,7 +413,7 @@ local function think(e: Enemy, dt: number, players: { { p: Player, pos: Vector2 
 		local arrived = moveToward(e, goal, e.def.walk, dt)
 		local v = e.root.AssemblyLinearVelocity
 		if v.Magnitude > 0.1 then
-			face(e, math.atan2(v.X, v.Z), dt, Config.Move.turn)
+			face(e, math.atan2(v.X, v.Z), dt, e.def.turnPatrol)
 		end
 		if now > e.alertUntil or arrived and now > e.alertUntil - e.def.forget * 0.5 then
 			e.state = "patrol"
@@ -417,7 +433,7 @@ local function think(e: Enemy, dt: number, players: { { p: Player, pos: Vector2 
 			end
 			local v = e.root.AssemblyLinearVelocity
 			if v.Magnitude > 0.1 then
-				face(e, math.atan2(v.X, v.Z), dt, Config.Move.turn)
+				face(e, math.atan2(v.X, v.Z), dt, e.def.turnPatrol)
 			end
 		else
 			stop(e)
@@ -441,7 +457,7 @@ end
 -- roll the decoded spawners: count [min, max] at distinct points, the per-point kind mix (`kinds`), the spawn delay
 -- (whenToSpawn: raid seconds), minDist from every player; boss groups pick one option. Unported kinds are skipped and
 -- listed in the port ledger (boss, contractor, wolf, giant, operator; bloater / stormling / drone need rain, storm, night).
-local PORTED = { scrapper = true, scav = true, brute = true, scrapper_rifle = true }
+local PORTED = { scrapper = true, scav = true, brute = true, scrapper_rifle = true, contractor = true, boss = true, wolf = true }
 local function rollSpawners()
 	local n, skipped = 0, {}
 	local groupPick: { [string]: number } = {}

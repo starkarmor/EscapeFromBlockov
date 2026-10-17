@@ -169,7 +169,9 @@ end
 
 local function sendBox(p: Player, b: Box)
 	local r = Raid.raids[p]
-	Net.event("LootOpen"):FireClient(p, b.id, b.label ~= "" and b.label or (b.container or b.kind), view(b), r and Loot.bagView(r.bag) or {})
+	local t = b.container and Items.types[b.container]
+	local name = if b.label ~= "" then b.label elseif t and t.name then t.name else (b.container or b.kind)
+	Net.event("LootOpen"):FireClient(p, b.id, name, view(b), r and Loot.bagView(r.bag) or {})
 end
 
 function Loot.bagView(bag: { any }): { any }
@@ -227,8 +229,84 @@ local function interact(p: Player, id: any)
 	end
 end
 
+local flags: { [string]: boolean } = {}
+Loot.flags = flags
+local TweenService = game:GetService("TweenService")
+
+local function doorToggle(p: Player, b: Box)
+	local d = b.data
+	local r = Raid.raids[p]
+	if d.key and not d.unlocked then
+		if not r or Raid.count(r.bag, d.key) <= 0 then
+			local def = Items.items[d.key]
+			Net.event("Toast"):FireClient(p, "Locked: needs " .. (def and def.name or d.key), "bad")
+			return
+		end
+		d.unlocked = true
+		if d.keyUse == "finish" then
+			Raid.take(r.bag, d.key, 1)
+			Raid.sendBag(p)
+		end
+	end
+	d.open = not d.open
+	Workspace:SetAttribute("Door_" .. b.id, d.open)
+	local leaf: BasePart = d.part
+	leaf.CanCollide = not d.open
+	TweenService:Create(leaf, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { CFrame = if d.open then d.openCf else d.closedCf }):Play()
+end
+
+local function build(p: Player, b: Box)
+	local d = b.data
+	if flags[d.flag] then
+		return
+	end
+	local r = Raid.raids[p]
+	if not r then
+		return
+	end
+	for _, c in d.cost.items do
+		if Raid.count(r.bag, c[1]) < c[2] then
+			local def = Items.items[c[1]]
+			Net.event("Toast"):FireClient(p, string.format("Needs %d %s", c[2], def and def.name or c[1]), "bad")
+			return
+		end
+	end
+	for _, c in d.cost.items do
+		Raid.take(r.bag, c[1], c[2])
+	end
+	Raid.sendBag(p)
+	flags[d.flag] = true
+	Workspace:SetAttribute("Flag_" .. string.gsub(d.flag, "[^%w_]", "_"), true)
+	local site = Workspace:FindFirstChild("GroundZero") and Workspace.GroundZero:FindFirstChild("Sites") and Workspace.GroundZero.Sites:FindFirstChild(d.flag)
+	if site then
+		for _, f in { "Block", "NotBuilt" } do
+			local fo = site:FindFirstChild(f)
+			if fo then
+				fo:Destroy()
+			end
+		end
+		local built = site:FindFirstChild("Built")
+		if built then
+			for _, part in built:GetChildren() do
+				if part:IsA("BasePart") then
+					part.Transparency = 0
+				end
+			end
+		end
+	end
+	Net.event("Toast"):FireClient(p, if #d.cost.items > 0 then "Built!" else "Opened", "good")
+	boxes[b.id] = nil
+	Workspace:SetAttribute("Box_" .. b.id, nil)
+end
+
 function Loot.finish(p: Player, b: Box)
-	if b.kind == "hatch" then
+	if b.kind == "door" then
+		doorToggle(p, b)
+	elseif b.kind == "construct" then
+		build(p, b)
+	elseif b.kind == "hatch" and b.label == "Go Down" and not flags["site:GroundZero_ManHole"] then
+		Net.event("Toast"):FireClient(p, "The manhole is closed", "bad")
+	elseif b.kind == "hatch" then
 		-- SceneLoaderProxy to the bunker: the raid ends like an extraction
 		Raid.extract(p)
 	elseif b.kind == "teleport" and b.data and b.data.to then
@@ -335,6 +413,102 @@ function Loot.start()
 			local b: Box = { id = it.id, kind = it.kind, x = it.x, z = it.z, r = math.max(it.r or 1.8, 1.8), label = it.label or it.kind, hold = it.hold or 0, table = nil, container = nil, rolled = true, items = {}, part = nil, data = data }
 			boxes[b.id] = b
 			publish(b)
+		end
+	end
+	-- doors: the decoded leaf box, swinging openAngle about its hinge end (Builder.door: lerp 0.5 s)
+	local doorFolder = Instance.new("Folder")
+	doorFolder.Name = "Doors"
+	doorFolder.Parent = folder
+	for _, d in MapData.doors or {} do
+		local bx = d.box
+		local w, dz = bx.maxX - bx.minX, bx.maxZ - bx.minZ
+		local h = 1.5 -- drawn at the wall cut like the rooms (Builder.wallCut)
+		local leaf = Instance.new("Part")
+		leaf.Name = "Door"
+		leaf.Anchored = true
+		leaf.Size = Vector3.new(w, h, dz) * S
+		leaf.Color = if d.key then Color3.fromHex("#E8322E") else Color3.fromHex("#8A5A2B")
+		leaf.Material = Enum.Material.Plastic
+		leaf.CollisionGroup = "M31"
+		leaf:SetAttribute("Cat", 31)
+		local cx, cz = (bx.minX + bx.maxX) / 2, (bx.minZ + bx.maxZ) / 2
+		local closed = CFrame.new(cx * S, h * S / 2, cz * S)
+		local hinge = if d.axis == "x" then Vector3.new(bx.minX, 0, cz) else Vector3.new(cx, 0, bx.minZ)
+		local hingeCf = CFrame.new(hinge.X * S, h * S / 2, hinge.Z * S)
+		local openCf = hingeCf * CFrame.Angles(0, d.openAngle or math.pi / 2, 0) * hingeCf:Inverse() * closed
+		leaf.CFrame = closed
+		leaf.Parent = doorFolder
+		local b: Box = { id = d.id, kind = "door", x = d.x, z = d.z, r = 1.8, label = if d.key then "Unlock" else "Open", hold = d.interactTime or 0.2, table = nil, container = nil, rolled = true, items = {}, part = nil,
+			data = { open = false, key = d.key, keyUse = d.keyUse, part = leaf, closedCf = closed, openCf = openCf } }
+		boxes[b.id] = b
+		Workspace:SetAttribute("Door_" .. b.id, false)
+	end
+	for _, it in MapData.interacts do
+		if it.kind == "construct" then
+			local b: Box = { id = it.id, kind = "construct", x = it.x, z = it.z, r = it.r or 2.4, label = it.label or "Build", hold = it.hold or 0, table = nil, container = nil, rolled = true, items = {}, part = nil,
+				data = { flag = it.flag, cost = it.cost or { money = 0, items = {} } } }
+			boxes[b.id] = b
+		end
+	end
+	-- markers: the bunker hatch and the extraction pad (web: a translucent column; art brief: violet extraction column)
+	local function column(x: number, z: number, r: number, h: number, label: string)
+		local m = Instance.new("Model")
+		m.Name = label
+		local col = Instance.new("Part")
+		col.Shape = Enum.PartType.Cylinder
+		col.Anchored = true
+		col.CanCollide = false
+		col.CanQuery = false
+		col.CastShadow = false
+		col.Material = Enum.Material.Neon
+		col.Color = Color3.fromHex("#9938F2")
+		col.Transparency = 0.6
+		col.Size = Vector3.new(h * S, r * 2 * S, r * 2 * S)
+		col.CFrame = CFrame.new(x * S, h * S / 2, z * S) * CFrame.Angles(0, 0, math.pi / 2)
+		col.Parent = m
+		local pad = col:Clone()
+		pad.Transparency = 0.15
+		pad.Material = Enum.Material.Neon
+		pad.Color = Color3.fromHex("#FFF8E9")
+		pad.Size = Vector3.new(0.08 * S, r * 2 * S + 0.6, r * 2 * S + 0.6)
+		pad.CFrame = CFrame.new(x * S, 0.04 * S, z * S) * CFrame.Angles(0, 0, math.pi / 2)
+		pad.Parent = m
+		local bb = Instance.new("BillboardGui")
+		bb.Size = UDim2.fromOffset(160, 40)
+		bb.StudsOffsetWorldSpace = Vector3.new(0, h * S + 2, 0)
+		bb.AlwaysOnTop = true
+		bb.LightInfluence = 0
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency = 1
+		t.Size = UDim2.fromScale(1, 1)
+		t.FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json")
+		t.TextSize = 24
+		t.TextColor3 = Color3.fromHex("#FFF8E9")
+		t.Text = label
+		local st = Instance.new("UIStroke")
+		st.Thickness = 3
+		st.Color = Color3.fromHex("#16151D")
+		st.Parent = t
+		t.Parent = bb
+		bb.Adornee = col
+		bb.Parent = col
+		m.Parent = folder
+		-- slow spin of the pad ring so it reads as live
+		task.spawn(function()
+			local a = 0
+			while m.Parent do
+				a += 0.03
+				col.Transparency = 0.55 + 0.1 * math.sin(a * 3)
+				task.wait(1 / 20)
+			end
+		end)
+	end
+	for _, ex in MapData.exits or {} do
+		column(ex.x, ex.z, ex.r or 3, 4, "EXTRACT")
+	end
+	for _, it in MapData.interacts do
+		if it.kind == "hatch" and it.label == "Enter Bunker" then
+			column(it.x, it.z, 1.2, 3.5, "BUNKER")
 		end
 	end
 	print(string.format("[Canuckov] %d containers this raid", n))

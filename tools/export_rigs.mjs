@@ -28,6 +28,8 @@ try {
       g.updateMatrixWorld(true);
       const inv = g.matrixWorld.clone().invert();
       const parts = [];
+      // only the shared humanoid skeleton (46 bones, BoneAnim) maps to the Roblox animator; other rigs export in model space
+      const humanoid = !!(rig.anim && rig.anim.sk && rig.anim.sk.bones && rig.anim.sk.bones.length === 46);
       const V = g.position.constructor;
       const Q = g.quaternion.constructor;
       const p = new V(), s = new V(), q = new Q();
@@ -38,7 +40,7 @@ try {
         const mat = Array.isArray(o.material) ? o.material[0] : o.material;
         if (!vis || (mat && mat.visible === false) || (mat && mat.opacity === 0)) return;
         let bone = null;
-        for (let a = o.parent; a; a = a.parent) if (a.userData && a.userData.bone !== undefined) { bone = a; break; }
+        if (humanoid) for (let a = o.parent; a; a = a.parent) if (a.userData && a.userData.bone !== undefined) { bone = a; break; }
         const geo = o.geometry; geo.computeBoundingBox();
         const bb = geo.boundingBox;
         const size = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z];
@@ -60,7 +62,7 @@ try {
       // the root scale (enemy kinds scale the skeleton root)
       let rootScale = 1;
       g.traverse((o) => { if (o.userData && o.userData.bone === 0 && o.parent) rootScale = o.parent.scale.x; });
-      return { name, parts, rootScale: r(rootScale), skeletal: !!rig.anim };
+      return { name, parts, rootScale: humanoid ? r(rootScale) : 1, skeletal: humanoid };
     };
     const rigs = { player: dumpRig(w.player.rig, 'beaver') };
     const p = w.player;

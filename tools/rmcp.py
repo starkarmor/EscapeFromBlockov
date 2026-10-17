@@ -52,4 +52,5 @@ def main():
         c.p.stdin.close()
         try: c.p.wait(3)
         except Exception: c.p.terminate()
-main()
+if __name__ == "__main__":
+    main()

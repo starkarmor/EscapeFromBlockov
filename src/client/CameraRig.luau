@@ -19,7 +19,29 @@ local yawRad = math.rad(-C.yaw)
 CameraRig.right = Vector2.new(math.cos(yawRad), -math.sin(yawRad))
 CameraRig.fwd = Vector2.new(-math.sin(yawRad), -math.cos(yawRad))
 
-local pitch, dist = C.pitch, C.distance
+local pitch, dist, armYaw = C.pitch, C.distance, C.yaw
+
+local function applyYaw()
+	local y = math.rad(-armYaw)
+	CameraRig.right = Vector2.new(math.cos(y), -math.sin(y))
+	CameraRig.fwd = Vector2.new(-math.sin(y), -math.cos(y))
+end
+
+--- CameraVolumes.blendVolumes for the character's point
+local function armGoal(px: number, pz: number): (number, number, number)
+	local gp, gy, gd = C.pitch, C.yaw, C.distance
+	for _, v in Config.CameraVolumes do
+		local d = math.max(0, math.sqrt((px - v.x) ^ 2 + (pz - v.z) ^ 2) - v.sphere)
+		if d * d <= v.blend * v.blend then
+			local t = if v.blend > 0 then 1 - (d * d) / (v.blend * v.blend) else 1
+			t = math.clamp(t, 0, 1)
+			gp += (v.pitch - gp) * t
+			gy += (v.yaw - gy) * t
+			gd += (v.distance - gd) * t
+		end
+	end
+	return gp, gy, gd
+end
 local offX, offZ = 0, 0
 local lerpSpeed = C.lerpIdle
 local adsValue = 0
@@ -65,6 +87,9 @@ end
 
 function CameraRig.snapTo(x: number, z: number)
 	offX, offZ = 0, 0
+	-- a new map starts at the defaults, then eases into the volumes (CameraRig.update volGen reset)
+	pitch, dist, armYaw = C.pitch, C.distance, C.yaw
+	applyYaw()
 	target = Vector2.new(x, z)
 	local cam = Workspace.CurrentCamera
 	if cam then
@@ -100,6 +125,17 @@ function CameraRig.update(dt: number, tx: number, tz: number, a: AimInput)
 		return
 	end
 	cam.CameraType = Enum.CameraType.Scriptable
+	-- CameraArm.Update: ease to the blended volumes (pitch 5/s, yaw and distance 2/s)
+	local tp, ty, td = armGoal(tx, tz)
+	if pitch ~= tp or dist ~= td or armYaw ~= ty then
+		pitch += (tp - pitch) * math.min(1, 5 * dt)
+		armYaw += (ty - armYaw) * math.min(1, 2 * dt)
+		dist += (td - dist) * math.min(1, 2 * dt)
+		if math.abs(tp - pitch) < 1e-3 then pitch = tp end
+		if math.abs(ty - armYaw) < 1e-3 then armYaw = ty end
+		if math.abs(td - dist) < 1e-3 then dist = td end
+		applyYaw()
+	end
 	if a.adsFactor == nil then
 		adsValue += math.clamp((if a.adsInput then 1 else 0) - adsValue, -10 * dt, 10 * dt)
 	else

@@ -31,7 +31,17 @@ local openBox: string? = nil
 local LABEL = { container = "Search", corpse = "Search", hatch = "Enter Bunker", teleport = "Go", loader = "Enter" }
 
 local function refreshPoints()
+	for _, d in MapData.doors or {} do
+		points[d.id] = { id = d.id, kind = "door", label = if d.key then "Unlock" else "Open", x = d.x, z = d.z, r = 1.8, hold = d.interactTime or 0.2 }
+	end
 	for _, it in MapData.interacts do
+		if it.kind == "construct" then
+			local cost = {}
+			for _, c in (it.cost and it.cost.items) or {} do
+				table.insert(cost, string.format("%d %s", c[2], c[1]))
+			end
+			points[it.id] = { id = it.id, kind = "construct", label = (it.label or "Build") .. (if #cost > 0 then " (" .. table.concat(cost, ", ") .. ")" else ""), x = it.x, z = it.z, r = it.r or 2.4, hold = it.hold or 0, flag = it.flag } :: any
+		end
 		if it.kind == "hatch" or (it.kind == "teleport" and it.label == "Go") or it.kind == "loader" then
 			points[it.id] = { id = it.id, kind = it.kind, label = it.label, x = it.x, z = it.z, r = math.max(it.r or 1.8, 1.8), hold = it.hold or 0 }
 		end
@@ -190,6 +200,9 @@ end
 function Interact.update(_dt: number)
 	local best, bd = nil :: Point?, math.huge
 	for _, pt in points do
+		if pt.kind == "construct" and Workspace:GetAttribute("Flag_" .. (string.gsub(tostring((pt :: any).flag), "[^%w_]", "_"))) then
+			continue
+		end
 		local d = (Vector2.new(pt.x, pt.z) - PC.pos).Magnitude
 		if d <= pt.r and d < bd then
 			best, bd = pt, d
@@ -198,7 +211,11 @@ function Interact.update(_dt: number)
 	current = best
 	local holdId = player:GetAttribute("HoldId")
 	if best and not openBox then
-		Hud.setPrompt(best.label ~= "" and best.kind ~= "container" and best.label or LABEL[best.kind] or "Use", Vector3.new(best.x, 1.0, best.z))
+		local text = best.label ~= "" and best.kind ~= "container" and best.label or LABEL[best.kind] or "Use"
+		if best.kind == "door" and Workspace:GetAttribute("Door_" .. best.id) then
+			text = "Close"
+		end
+		Hud.setPrompt(text, Vector3.new(best.x, 1.0, best.z))
 	else
 		Hud.setPrompt(nil, nil)
 	end

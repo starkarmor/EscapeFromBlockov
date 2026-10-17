@@ -26,7 +26,7 @@ P = {
     'log': (0x8A, 0x5A, 0x2B), 'bark': (0x5A, 0x3A, 0x1E), 'maple': (0xE8, 0x32, 0x2E), 'coral': (0xF3, 0x45, 0x43),
     'violet': (0x99, 0x38, 0xF2), 'gold': (0xFF, 0xD8, 0x3D), 'concrete': (0xB9, 0xBC, 0xC4), 'concrete2': (0xA4, 0xA8, 0xB2),
     'ink': (0x16, 0x15, 0x1D), 'white': (0xFF, 0xF8, 0xE9), 'asphalt': (0x6E, 0x72, 0x7C), 'mud': (0xB8, 0x8E, 0x55),
-    'rock1': (0x9C, 0x9A, 0x94), 'rock2': (0x86, 0x84, 0x7E), 'rock3': (0x74, 0x72, 0x6C), 'rock4': (0x64, 0x62, 0x5D),
+    'rock1': (0x8A, 0x84, 0x7A), 'rock2': (0x76, 0x70, 0x67), 'rock3': (0x64, 0x5F, 0x58), 'rock4': (0x54, 0x50, 0x4A),
     'cap': (0x3A, 0x3C, 0x44), 'bush': (0x4C, 0xC2, 0x3A), 'bush2': (0x3E, 0xAE, 0x30),
 }
 # web stand-in colour -> (kind, art role). KIND_COLOUR in src/world/LevelMap.ts; rock bands; caps.
@@ -122,6 +122,7 @@ def surface_of(i):
     k = cls[i]
     if k == WATER: return 'water'
     if k == ROCK: return 'rock'
+    if k == LEDGE: return 'ledge'  # non-walkable terrain: the web shades it x0.72; here the brief's forest green
     s = splat[i]
     name = layers[s] if s != 255 and s < len(layers) else ''
     if 'Asphalt' in name: return 'asphalt'
@@ -154,7 +155,7 @@ for ty in range(TH):
         for yy in range(ty, ty + h):
             for xx in range(tx, tx + w): used[yy * TW + xx] = True
         rects.append((s, tx, ty, w, h))
-SURF = {'grass': ('meadow', 'meadow2'), 'mud': ('sand', 'sand2'), 'asphalt': ('asphalt', 'asphalt'), 'water': ('river', 'river2'), 'rock': ('rock3', 'rock3')}
+SURF = {'ledge': ('forest', 'forest2'), 'grass': ('meadow', 'meadow2'), 'mud': ('sand', 'sand2'), 'asphalt': ('asphalt', 'asphalt'), 'water': ('river', 'river2'), 'rock': ('rock3', 'rock3')}
 ground = []
 GROUND_T = 2.0  # studs thick, top at y = 0
 for s, tx, ty, w, h in rects:
@@ -168,7 +169,7 @@ for s, tx, ty, w, h in rects:
                            material='SmoothPlastic', transparency=0.1, attrs={'Surface': 'water', 'Cat': 0}, cast=False, group='Ground'))
     else:
         ground.append(part('Ground', 'Part', (sp(cx), -GROUND_T / 2, sp(cz)), (sp(ww), GROUND_T, sp(hh)), rgb,
-                           variant='CanuckStuds' if s in ('grass', 'mud') else '', attrs={'Surface': s, 'Cat': 0}, cast=False, group='Ground'))
+                           variant='CanuckStuds' if s in ('grass', 'mud', 'ledge') else '', attrs={'Surface': s, 'Cat': 0}, cast=False, group='Ground'))
 # apron beyond the playable bounds
 bx0, bx1, bz0, bz1 = ox, ox + W * cell, oz, oz + H * cell
 ground.append(part('Apron', 'Part', (sp((bx0 + bx1) / 2), -GROUND_T / 2 - 0.2, sp((bz0 + bz1) / 2)), (sp(bx1 - bx0 + 300), GROUND_T, sp(bz1 - bz0 + 300)), P['forest'], collide=False, query=False, cast=False))
@@ -176,7 +177,7 @@ ground.append(part('Apron', 'Part', (sp((bx0 + bx1) / 2), -GROUND_T / 2 - 0.2, s
 
 # ---------------------------------------------------------------- body colliders from the grid (LevelMap.ts "body colliders")
 # rock cells: 6 m boxes (rcat flags; greedy per flag); water / ledge cells: 0.3 m, bodies only. Invisible.
-rcat = [v - 48 for v in unrle(g['rcat'], n)] if g.get('rcat') else [31] * n
+
 def greedy_cells(pred):
     seen = bytearray(n); out = []
     for z in range(H):
@@ -193,11 +194,51 @@ def greedy_cells(pred):
                 seen[zz * W + x: zz * W + x + w] = b'\x01' * w
             out.append((k, x, z, w, h))
     return out
+# ---------------------------------------------------------------- construction sites (LevelMap.ts "construction sites")
+# non-floor cells under a site's built objects stay blocked by the site's own obstacle until built; notBuilt boxes are the
+# debris drawn until then, built boxes appear after. Keys map to the interacts' flags (bridge, gate, site:<key>).
+SITE_FLAG = {'GroundZero_Bridge': 'bridge', 'GroundZero_SingleWayDoor0': 'gate'}
+sites = [c for c in sub['constructionSites'] if not c.get('inactive') and c.get('key') and c.get('interact') and not c['interact'].get('inactive')]
+site_cell = {}
+for si, c in enumerate(sites):
+    for bx in c['built']:
+        rr = math.hypot(bx['l'], bx['w']) / 2 + cell
+        ca, sa = math.cos(bx['ang']), math.sin(bx['ang'])
+        for gz in range(max(0, int((bx['at'][1] - rr - oz) / cell)), min(H - 1, int((bx['at'][1] + rr - oz) / cell)) + 1):
+            for gx in range(max(0, int((bx['at'][0] - rr - ox) / cell)), min(W - 1, int((bx['at'][0] + rr - ox) / cell)) + 1):
+                i = gz * W + gx
+                if cls[i] == FLOOR: continue
+                cx = ox + (gx + 0.5) * cell; cz = oz + (gz + 0.5) * cell
+                dx, dz = cx - bx['at'][0], cz - bx['at'][1]
+                u = dx * ca + dz * sa; v = -dx * sa + dz * ca
+                if abs(u) <= bx['l'] / 2 + cell / 2 and abs(v) <= bx['w'] / 2 + cell / 2:
+                    site_cell[i] = si
+def site_box(bx, colour, name, visible, collide, cat):
+    h = max(0.1, min(2.4, bx['y'][1] - bx['y'][0]))
+    y0 = max(0.0, bx['y'][0])
+    a = -bx['ang']
+    R = [math.cos(a), 0, math.sin(a), 0, 1, 0, -math.sin(a), 0, math.cos(a)]
+    return part(name, 'Part', (sp(bx['at'][0]), sp(y0 + h / 2), sp(bx['at'][1])), (sp(max(0.1, bx['l'])), sp(h), sp(max(0.1, bx['w']))), colour, R,
+                collide=collide, transparency=0 if visible else 1, attrs={'Cat': cat}, group='M%d' % cat, query=collide)
+site_folders = []
+for si, c in enumerate(sites):
+    flag = SITE_FLAG.get(c['key'], 'site:' + c['key'])
+    block = []
+    for k, x, z, w, h in greedy_cells(lambda i, si=si: 1 if site_cell.get(i) == si else 0):
+        cx = ox + (x + w / 2) * cell; cz = oz + (z + h / 2) * cell
+        block.append(part('SiteBlock', 'Part', (sp(cx), sp(0.15), sp(cz)), (sp(w * cell), sp(0.3), sp(h * cell)), P['ink'], transparency=1, attrs={'Cat': 1}, cast=False, group='M1'))
+    nb = [site_box(bx, P['bark'], 'NotBuilt', True, False, 0) for bx in c['notBuilt']]
+    bt = [site_box(bx, P['log'], 'Built', False, False, 0) for bx in c['built']]
+    ref[0] += 1
+    site_folders.append('<Item class="Folder" referent="R%d"><Properties><string name="Name">%s</string>%s</Properties>%s%s%s</Item>' % (
+        ref[0], escape(flag), attrs_xml({'Flag': flag, 'Key': c['key']}), folder('Block', block), folder('NotBuilt', nb), folder('Built', bt)))
+
+rcat = [v - 48 for v in unrle(g['rcat'], n)] if g.get('rcat') else [31] * n
 colliders = []
 def rock_key(i):
     return (rcat[i] or 31) if cls[i] == ROCK else 0
 def low_key(i):
-    return 1 if cls[i] in (WATER, LEDGE) else 0
+    return 1 if cls[i] in (WATER, LEDGE) and i not in site_cell else 0
 for key_fn, height in ((rock_key, 6.0), (low_key, 0.3)):
     for k, x, z, w, h in greedy_cells(key_fn):
         cx = ox + (x + w / 2) * cell; cz = oz + (z + h / 2) * cell
@@ -208,6 +249,31 @@ for cx, cz, ww, dd in ((bx0 - 2, (bz0 + bz1) / 2, 4, bz1 - bz0 + 8), (bx1 + 2, (
                        ((bx0 + bx1) / 2, bz0 - 2, bx1 - bx0 + 8, 4), ((bx0 + bx1) / 2, bz1 + 2, bx1 - bx0 + 8, 4)):
     colliders.append(part('Edge', 'Part', (sp(cx), sp(3), sp(cz)), (sp(ww), sp(6), sp(dd)), P['ink'], transparency=1, attrs={'Cat': 31}, cast=False, group='M31'))
 
+# ---------------------------------------------------------------- source group -> art role (decoded solids' grp names)
+import re as _re
+solid_grp = {}
+for so in sub.get('solids', []):
+    solid_grp[(round(so['at'][0], 2), round(so['at'][1], 2))] = so.get('grp', '')
+GROUP_ROLE = [
+    (r'Fence|WoodBox|Wood_Fence|Desk|Quilt|BagsTile', 'log'),
+    (r'PaperBox|BoxGroup|CementMold', 'sand2'),
+    (r'BarbedWire|DoorWire', 'cap'),
+    (r'Car|Truck', 'maple'),
+    (r'Container_01_Y', 'gold'),
+    (r'Container_01_D|Container_03', 'river2'),
+    (r'OilBarrel|Explosive', 'coral'),
+    (r'WaterTank|WaterButt|Cistern', 'river'),
+    (r'Roadblock', 'white'),
+    (r'House|Shed|Budiling', 'log'),
+    (r'SignalTower|MetalBoard', 'concrete2'),
+    (r'Garbage', 'bark'),
+]
+def group_role(grp):
+    for pat, role in GROUP_ROLE:
+        if _re.search(pat, grp):
+            return role
+    return None
+
 # ---------------------------------------------------------------- props from the web export
 props, rocks, caps, bushes = [], [], [], []
 counts = {}
@@ -215,6 +281,8 @@ for m in d['meshes']:
     t = m['g']['t']
     if t not in ('box', 'cyl'): continue
     col = (m['m'] or {}).get('c')
+    if col in ('#6e5236', '#8a6a46'):
+        continue  # construction-site debris / planks: the Sites folder owns them
     kind, role = WEB_KIND.get(col, ('prop', None))
     q = m['q']; s = m['s']; p = m['p']; G = m['g']
     R = qmat(q)
@@ -234,6 +302,10 @@ for m in d['meshes']:
         cat = 31
     else:
         rgb = P[role]; mat = 'Plastic'; cat = KIND_CAT[kind]
+        grp = solid_grp.get((round(p[0], 2), round(p[2], 2)))
+        gr = group_role(grp) if grp else None
+        if gr and kind not in ('rock', 'cap'):
+            rgb = P[gr]
     counts[kind] = counts.get(kind, 0) + 1
     pos = (sp(p[0]), sp(p[1]), sp(p[2]))
     hTop = p[1] + size[1] / S / 2; base = p[1] - size[1] / S / 2
@@ -265,7 +337,7 @@ for m in d['meshes']:
                          collide=False, query=False, attrs={'Cat': 0, 'Kind': 'leaves'}, variant='CanuckStuds', group='M0'))
     trees.append(model('Pine', kids))
 
-world = folder('GroundZero', [folder('Ground', ground), folder('Colliders', colliders), folder('Rocks', rocks), folder('Props', props), folder('Bushes', bushes), folder('Caps', caps), folder('Trees', trees)])
+world = folder('GroundZero', [folder('Ground', ground), folder('Colliders', colliders), folder('Rocks', rocks), folder('Props', props), folder('Bushes', bushes), folder('Caps', caps), folder('Trees', trees), folder('Sites', site_folders)])
 xml = '<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">' + world + '</roblox>'
 os.makedirs(os.path.join(ROOT, 'src/world'), exist_ok=True)
 open(os.path.join(ROOT, 'src/world/GroundZero.rbxmx'), 'w').write(xml)

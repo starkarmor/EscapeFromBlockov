@@ -49,6 +49,28 @@ function Fx.tracer(o: Vector3, yaw: number, slope: number, speed: number, range:
 	local d = Vector3.new(math.sin(yaw), slope, math.cos(yaw)).Unit
 	local hit = Workspace:Raycast(o * S, d * range * S, bulletParams)
 	local dist = if hit then (hit.Position / S - o).Magnitude else range
+	-- stop at the first character capsule on the line (hit3d radius 0.5 m), like the server's bullet
+	local chars = Workspace:FindFirstChild("Characters")
+	if chars and not mine then
+		-- someone else's shot can end on anyone, our own beaver included
+	end
+	if chars then
+		local d2 = Vector2.new(d.X, d.Z)
+		local dl = d2.Magnitude
+		if dl > 1e-6 then
+			d2 /= dl
+			for _, m in chars:GetChildren() do
+				local r = m:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if r and not m:GetAttribute("Dead") then
+					local rel = Vector2.new(r.Position.X / S - o.X, r.Position.Z / S - o.Z)
+					local along = rel:Dot(d2)
+					if along > 0.9 and along / dl < dist and (rel - d2 * along).Magnitude <= 0.5 then
+						dist = math.min(dist, along / dl)
+					end
+				end
+			end
+		end
+	end
 	local part = neon(Vector3.new(0.12, 0.12, 1.4) * S * 0.5, CFrame.lookAt(o * S, (o + d) * S), Color3.fromRGB(255, 244, 196))
 	table.insert(tracers, { part = part, o = o, d = d, speed = speed, len = 0.7, t = 0, maxT = dist / speed })
 	if hit and mine then

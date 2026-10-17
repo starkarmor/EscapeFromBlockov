@@ -36,6 +36,8 @@ PC.held = "gun"
 PC.blocked = false -- a UI panel or an interaction owns input
 PC.actionMove = true -- the running action allows moving (reload yes, interact no)
 PC.actionRun = true
+PC.moveability = 1
+PC.meleeAnim = 0 -- 1 at a swing, decays 5/s (Player.ts meleeAnim)
 
 local clock = 0
 local dashEnd = -math.huge
@@ -86,6 +88,7 @@ function PC.update(dt: number, cursor: Vector2)
 		return
 	end
 	clock += dt
+	PC.meleeAnim = math.max(0, PC.meleeAnim - dt * 5)
 	local p = r.Position
 	PC.pos = Vector2.new(p.X / S, p.Z / S)
 	local intent = moveIntent()
@@ -103,8 +106,29 @@ function PC.update(dt: number, cursor: Vector2)
 	end
 
 	local held = if gun and gun.MoveSpeedMultiplier > 0 then gun.MoveSpeedMultiplier else 1
-	local walkEff = M.walk * held
-	local runEff = M.run * held
+	-- raid-only percentage adds: weight band (Buff 1021 / 1023 / 1024), Starve -10% (Player.ts speeds)
+	local Wt = Config.Weight
+	local plr = Players.LocalPlayer
+	local load = plr:GetAttribute("Load")
+	local energy = plr:GetAttribute("Energy")
+	local water = plr:GetAttribute("Water")
+	local pct = 0
+	if typeof(load) == "number" then
+		if load <= Wt.light then
+			pct += Wt.lightSpeed
+		elseif load > Wt.over then
+			pct += Wt.overSpeed
+		elseif load > Wt.heavy then
+			pct += Wt.heavySpeed
+		end
+	end
+	if typeof(energy) == "number" and energy <= 0 then
+		pct += Wt.starveSpeed
+	end
+	PC.moveability = if typeof(water) == "number" and water <= 0 then math.max(0, 1 + Wt.thirstMoveability) else 1
+	local mob = PC.moveability
+	local walkEff = M.walk * math.max(0, 1 + pct) * mob * held
+	local runEff = M.run * math.max(0, 1 + pct) * mob * held
 	local adsMul = if PC.adsInput then (if gun then math.min(1, gun.AdsWalkSpeedMultiplier) else 0.5) else 1
 
 	-- CA_Dash
@@ -186,7 +210,7 @@ function PC.update(dt: number, cursor: Vector2)
 	end
 	if want then
 		local d = math.atan2(math.sin(want - PC.facing), math.cos(want - PC.facing))
-		local step = math.rad(if isAiming then M.aimTurn else M.turn) * dt
+		local step = math.rad(if isAiming then M.aimTurn else M.turn) * (PC.moveability or 1) * dt
 		PC.facing += math.clamp(d, -step, step)
 	end
 
@@ -216,8 +240,8 @@ function PC.animState(): any
 		speed = sp,
 		dirX = dx,
 		dirZ = dz,
-		aiming = PC.held == "gun",
-		melee = 0,
+		aiming = PC.held == "gun" and PC.meleeAnim <= 0,
+		melee = if PC.meleeAnim > 0 then math.max(1e-3, 1 - PC.meleeAnim) else 0,
 		dodge = if PC.dodgeT > 0 then math.max(1e-3, PC.dodgeT / D.time) else 0,
 	}
 end

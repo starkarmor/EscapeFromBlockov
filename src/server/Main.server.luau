@@ -14,4 +14,5 @@ local okL, Loot = pcall(require, script.Parent:FindFirstChild("Loot"))
 if okL and Loot then
 	Loot.start()
 end
+require(script.Parent.Actions).start()
 print("[Canuckov] server ready")

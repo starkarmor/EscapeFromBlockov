@@ -53,7 +53,7 @@ for p in pools.values():
     for iid, _ in p:
         need.add(iid)
 bodies = {}
-for k in ('scrapper', 'scav', 'brute', 'scrapper_rifle'):
+for k in ('scrapper', 'scav', 'brute', 'scrapper_rifle', 'contractor', 'boss', 'wolf'):
     if k in loot['bodies']:
         bodies[k] = loot['bodies'][k]
         for d in bodies[k]['drops']:

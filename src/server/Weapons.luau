@@ -29,7 +29,7 @@ export type Target = {
 -- registered by Raid (players) and Enemies
 Weapons.targets = {} :: { [any]: Target }
 
-export type Bullet = { pos: Vector3, dir: Vector3, speed: number, left: number, half: number, travelled: number, team: number, damage: number, dmgOver: number, crit: boolean, critMul: number, from: Player?, fromRef: any }
+export type Bullet = { fromName: string?, bleed: number?, pos: Vector3, dir: Vector3, speed: number, left: number, half: number, travelled: number, team: number, damage: number, dmgOver: number, crit: boolean, critMul: number, from: Player?, fromRef: any }
 local bullets: { Bullet } = {}
 
 local params = RaycastParams.new()
@@ -44,9 +44,13 @@ Weapons.getGun = nil :: ((Player) -> any)? -- Raid: the player's held firearm in
 Weapons.takeAmmo = nil :: ((Player, string, number) -> number)? -- Raid: remove up to n rounds of an ammo id, returns taken
 Weapons.countAmmo = nil :: ((Player, string) -> number)?
 Weapons.isDodging = nil :: ((Player) -> boolean)?
+Weapons.onBag = nil :: ((Player) -> ())?
 
 local function syncAmmo(p: Player)
 	local g = Weapons.getGun and Weapons.getGun(p)
+	if Weapons.onBag then
+		Weapons.onBag(p)
+	end
 	if g then
 		p:SetAttribute("Gun", g.id)
 		p:SetAttribute("Mag", g.ammo)
@@ -65,7 +69,7 @@ function Weapons.spawn(b: Bullet)
 	table.insert(bullets, b)
 end
 
-local function onFire(p: Player, muzzle: any, yaws: any, slope: any)
+local function onFire(p: Player, muzzle: any, yaws: any, slope: any, head: any)
 	if typeof(muzzle) ~= "Vector3" or typeof(yaws) ~= "table" or typeof(slope) ~= "number" then
 		return
 	end
@@ -111,6 +115,21 @@ local function onFire(p: Player, muzzle: any, yaws: any, slope: any)
 		per = 1
 	end
 	local range = Guns.range(row)
+	-- a head claim holds only with an enemy near the shot line within range (the client saw the cursor on its head)
+	local crit = false
+	if head == true and typeof(yaws[1]) == "number" then
+		local dir2 = Vector2.new(math.sin(yaws[1]), math.cos(yaws[1]))
+		for _, t in Weapons.targets do
+			local tp = t.team ~= 0 and t.pos()
+			if tp then
+				local rel = Vector2.new(tp.X - muzzle.X, tp.Z - muzzle.Z)
+				local along = rel:Dot(dir2)
+				if along > 0 and along <= range and (rel - dir2 * along).Magnitude <= t.radius + 0.6 then
+					crit = true
+				end
+			end
+		end
+	end
 	local clean = {}
 	for i = 1, math.min(#yaws, n) do
 		local yaw = yaws[i]
@@ -129,7 +148,7 @@ local function onFire(p: Player, muzzle: any, yaws: any, slope: any)
 			team = 0,
 			damage = per,
 			dmgOver = row.DmgOverDistance or 0.5,
-			crit = false,
+			crit = crit,
 			critMul = row.CritDamageFactor or 1,
 			from = p,
 			fromRef = p,
@@ -227,7 +246,7 @@ local function step(dt: number)
 			local at = a + (e - a) * u
 			local travelled = b.travelled + stepLen * u
 			local dmg = b.damage * (if travelled > b.half then b.dmgOver else 1) * (if b.crit then b.critMul else 1)
-			local killed = t.hurt(dmg, { from = b.from, fromRef = b.fromRef, crit = b.crit, dir = b.dir, at = at })
+			local killed = t.hurt(dmg, { from = b.from, fromRef = b.fromRef, fromName = b.fromName, bleed = b.bleed, crit = b.crit, dir = b.dir, at = at })
 			if b.from and b.from.Parent then
 				Net.event("Hit"):FireClient(b.from, killed, b.crit, at + Vector3.new(0, 1, 0), dmg)
 			end

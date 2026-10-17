@@ -20,7 +20,7 @@ local HAND = Skel.index["Hand.Soket.R"]
 local CULL = 70 * S
 
 type Joint = { j: Motor6D, c0inv: CFrame, bone: number, rel: CFrame, weapon: boolean, len: number }
-type Entry = { model: Model, root: BasePart, anim: Skel.Anim, joints: { Joint }, k: number, world: { CFrame } }
+type Entry = { model: Model, root: BasePart, anim: Skel.Anim, joints: { Joint }, k: number, world: { CFrame }, skeletal: boolean, phase: number }
 local entries: { [Model]: Entry } = {}
 
 -- the local player's state this frame (PlayerControl writes it)
@@ -53,7 +53,7 @@ local function track(model: Model)
 			})
 		end
 	end
-	entries[model] = { model = model, root = root, anim = Skel.newAnim(), joints = joints, k = spec.rootScale, world = {} }
+	entries[model] = { model = model, root = root, anim = Skel.newAnim(), joints = joints, k = spec.rootScale, world = {}, skeletal = spec.skeletal, phase = 0 }
 end
 
 local function untrack(model: Model)
@@ -107,6 +107,15 @@ function CharAnim.step(dt: number)
 				melee = phaseOf(model, "MeleeAt", 1 / 5, now),
 				dodge = phaseOf(model, "DodgeAt", Config.Dash.time, now),
 			}
+		end
+		if not e.skeletal then
+			-- quadruped (wolverine): its own skeleton is not ported; a procedural trot bob on the bind pose
+			e.phase += dt * math.max(0.6, st.speed / 1.2) * 2 * math.pi
+			local bob = CFrame.new(0, math.abs(math.sin(e.phase)) * 0.05 * S * math.min(1, st.speed), 0)
+			for _, jt in e.joints do
+				jt.j.Transform = jt.c0inv * bob * RigBuilder.partCFrame(e.world, 0, jt.rel, e.k)
+			end
+			continue
 		end
 		Skel.update(e.anim, st)
 		local world = Skel.fk(e.anim.pose, e.world)

@@ -158,13 +158,31 @@ local function syncVitals(p: Player)
 	p:SetAttribute("Energy", r.energy)
 	p:SetAttribute("Water", r.water)
 	p:SetAttribute("Alive", r.alive)
+	local w = 0
+	if r.gun and Guns.items[r.gun.id] then
+		w += Guns.items[r.gun.id].weight or 0
+	end
+	if Guns.items[r.melee] then
+		w += Guns.items[r.melee].weight or 0
+	end
+	for _, s in r.bag do
+		local def = Guns.items[s.id]
+		w += (def and def.weight or 0) * s.n
+	end
+	p:SetAttribute("Load", w / Config.Weight.carry)
+	p:SetAttribute("Weight", w)
 	p:SetAttribute("InRaid", r.inRaid)
 end
 Raid.syncVitals = syncVitals
 
 function Raid.sendBag(p: Player)
 	local r = raids[p]
-	Net.event("LootOpen"):FireClient(p, "bag", r and r.bag or {})
+	-- the hotbar reads the backpack from this attribute (id:count pairs)
+	local parts = {}
+	for _, s in (r and r.bag or {}) do
+		table.insert(parts, s.id .. ":" .. s.n)
+	end
+	p:SetAttribute("Bag", table.concat(parts, ","))
 end
 
 local function rootOf(p: Player): BasePart?
@@ -265,8 +283,10 @@ function Raid.deploy(p: Player)
 		end,
 		ref = p,
 	}
+	(r :: any).held = "gun"
 	syncVitals(p)
 	Weapons.syncAmmo(p)
+	Raid.sendBag(p)
 	Net.event("RaidState"):FireClient(p, "deployed")
 end
 
@@ -275,11 +295,18 @@ function Raid.hurt(p: Player, dmg: number, info: any): boolean
 	if not r or not r.alive then
 		return false
 	end
+	-- Studio test fixture only (tools/mcp tests set it); never active in a live server
+	if RunService:IsStudio() and p:GetAttribute("DevGod") then
+		return false
+	end
 	-- dodge roll: fully invulnerable (Player.ts dashing)
-	if os.clock() - r.dodgeAt < Config.Dash.time then
+	if os.clock() - r.dodgeAt < Config.Dash.time and not (info and info.direct) then
 		return false
 	end
 	r.hp = math.max(0, r.hp - dmg)
+	if info and info.bleed and math.random() < info.bleed then
+		Raid.addBleed(p)
+	end
 	syncVitals(p)
 	if r.hp <= 0 then
 		Raid.die(p, info)
@@ -356,11 +383,54 @@ function Raid.extract(p: Player)
 	saveProfile(p)
 end
 
+-- data.ts NEEDS (energy 8 / water 9 per real minute in a raid), STARVE (1 dmg / 2 s at 0 energy), BLEED (1 dmg / 1.5 s
+-- per layer, max 3 layers, 25 s; a new bleeding hit adds a layer and resets the timer)
+local function drains(p: Player, r: RaidState, dt: number)
+	local x = r :: any
+	r.energy = math.max(0, r.energy - 8 / 60 * dt)
+	r.water = math.max(0, r.water - 9 / 60 * dt)
+	x.starveT = (x.starveT or 0) + dt
+	if r.energy <= 0 and x.starveT >= 2 then
+		x.starveT = 0
+		Raid.hurt(p, 1, { fromName = "Starvation", direct = true })
+	end
+	if (x.bleed or 0) > 0 then
+		x.bleedLeft = (x.bleedLeft or 25) - dt
+		x.bleedT = (x.bleedT or 0) + dt
+		if x.bleedT >= 1.5 then
+			x.bleedT = 0
+			Raid.hurt(p, x.bleed, { fromName = "Bleeding", direct = true })
+		end
+		if x.bleedLeft <= 0 then
+			x.bleed = 0
+		end
+	end
+	p:SetAttribute("Bleed", x.bleed or 0)
+	x.vitalsT = (x.vitalsT or 0) + dt
+	if x.vitalsT > 0.5 then
+		x.vitalsT = 0
+		syncVitals(p)
+	end
+end
+
+function Raid.addBleed(p: Player)
+	local r = raids[p] :: any
+	if not r then
+		return
+	end
+	r.bleed = math.min(3, (r.bleed or 0) + 1)
+	r.bleedLeft = 25
+end
+
 -- extraction pad + clock + vitals drain each frame
 local function tick(dt: number)
 	local clock = os.clock() - raidStart
 	for p, r in raids do
 		p:SetAttribute("RaidClock", clock)
+		if not r.alive then
+			continue
+		end
+		drains(p, r, dt)
 		if not r.alive then
 			continue
 		end
@@ -410,6 +480,7 @@ function Raid.start()
 		local k = Raid.take(r.bag, id, n)
 		return k
 	end
+	Weapons.onBag = Raid.sendBag
 	Weapons.isDodging = function(p)
 		local r = raids[p]
 		return r ~= nil and os.clock() - r.dodgeAt < Config.Dash.time
@@ -441,6 +512,21 @@ function Raid.start()
 		p:SetAttribute("Stash", nil)
 		Raid.deploy(p)
 	end
+	Players.PlayerAdded:Connect(function(p)
+		if RunService:IsStudio() then
+			p:GetAttributeChangedSignal("DevGive"):Connect(function()
+				local v = p:GetAttribute("DevGive")
+				local r = raids[p]
+				if typeof(v) == "string" and r then
+					local id, n = string.match(v, "([^:]+):(%d+)")
+					if id then
+						Raid.addItem(r.bag, id, tonumber(n) or 1)
+						Raid.sendBag(p)
+					end
+				end
+			end)
+		end
+	end)
 	Players.PlayerAdded:Connect(join)
 	for _, p in Players:GetPlayers() do
 		task.spawn(join, p)

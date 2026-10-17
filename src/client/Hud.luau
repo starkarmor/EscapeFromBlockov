@@ -95,13 +95,25 @@ local function build()
 	-- clock (top-left)
 	local clock = Instance.new("Frame")
 	clock.BackgroundTransparency = 1
-	clock.Position = UDim2.fromOffset(18, 14)
+	-- top-right: Roblox reserves the top-left for its menu and chat (platform adaptation of the web's top-left clock)
+	clock.AnchorPoint = Vector2.new(1, 0)
+	clock.Position = UDim2.new(1, -18, 0, 14)
 	clock.Size = UDim2.fromOffset(300, 80)
 	clock.Parent = gui
 	refs.clockTime = label(clock, "08:00", 44)
 	local sub = label(clock, "Day  Sunny", 18)
 	sub.Position = UDim2.fromOffset(130, 6)
 	refs.clockSub = sub
+	-- storm line (WeatherManager.storm: 9 days asleep -> "Next Storm Arrives In: HHH:MM")
+	local storm = label(clock, "Next Storm Arrives In: 216:00", 16)
+	storm.Position = UDim2.fromOffset(0, 52)
+	storm.TextColor3 = Color3.fromRGB(214, 170, 255)
+	refs.storm = storm
+	-- weight status chip (Agile / Heavy / Overweight), bottom-left above the vitals like the web's status pill
+	local chip = label(gui, "", 16)
+	chip.AnchorPoint = Vector2.new(0, 1)
+	chip.Position = UDim2.new(0, 24, 1, -94)
+	refs.chip = chip
 
 	-- vitals (bottom-left)
 	local vit = Instance.new("Frame")
@@ -149,13 +161,13 @@ local function build()
 	-- weapons + hotbar (bottom centre)
 	local bar = Instance.new("Frame")
 	bar.BackgroundTransparency = 1
-	bar.AnchorPoint = Vector2.new(0.5, 1)
-	bar.Position = UDim2.new(0.5, 0, 1, -18)
+	bar.AnchorPoint = Vector2.new(0, 1)
+	bar.Position = UDim2.new(0, 22 + 330 + 18, 1, -18)
 	bar.Size = UDim2.fromOffset(620, 78)
 	bar.Parent = gui
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Padding = UDim.new(0, 8)
@@ -176,13 +188,16 @@ local function build()
 			uiStroke.Enabled = false
 		end
 		local name = label(s, "", 13)
+		name.AutomaticSize = Enum.AutomaticSize.None
+		name.TextScaled = true
+		name.Size = UDim2.new(1, -8, 0.7, 0)
 		name.AnchorPoint = Vector2.new(0.5, 0.5)
-		name.Position = UDim2.fromScale(0.5, 0.45)
+		name.Position = UDim2.fromScale(0.5, 0.42)
 		refs.slots[i] = { frame = s, name = name }
 	end
 	local ammo = label(gui, "", 24)
-	ammo.AnchorPoint = Vector2.new(0.5, 1)
-	ammo.Position = UDim2.new(0.5, -270 + 36, 1, -100)
+	ammo.AnchorPoint = Vector2.new(0, 1)
+	ammo.Position = UDim2.new(0, 22 + 330 + 18, 1, -98)
 	refs.ammo = ammo
 
 	-- stamina bar under the beaver
@@ -272,6 +287,11 @@ local function build()
 	pf.Parent = prog
 	refs.prog, refs.progFill = prog, pf
 
+	-- item use progress over the beaver
+	local useUntil, useStart = player:GetAttribute("UseUntil"), player:GetAttribute("UseStart")
+	if player:GetAttribute("UseId") and typeof(useUntil) == "number" and typeof(useStart) == "number" then
+		Hud.setProgress((Workspace:GetServerTimeNow() - useStart) / math.max(0.01, useUntil - useStart), Vector3.new(PC.pos.X, 1, PC.pos.Y))
+	end
 	-- extraction countdown (top centre)
 	local ex = label(gui, "", 34, WHITE)
 	ex.AnchorPoint = Vector2.new(0.5, 0)
@@ -343,6 +363,32 @@ function Hud.setProgress(frac: number?, at: Vector3?)
 	refs.progFill.Size = UDim2.fromScale(math.clamp(frac, 0, 1), 1)
 end
 
+-- hotbar: the backpack's usable items in order (keys 3-8 = slots 4-9)
+local hotbar: { string } = {}
+local function bagStacks(): { { id: string, n: number } }
+	local out = {}
+	local raw = player:GetAttribute("Bag")
+	if typeof(raw) ~= "string" then
+		return out
+	end
+	local counts, order = {}, {}
+	for id, n in string.gmatch(raw, "([^:,]+):(%d+)") do
+		if not counts[id] then
+			table.insert(order, id)
+			counts[id] = 0
+		end
+		counts[id] += tonumber(n) or 0
+	end
+	for _, id in order do
+		table.insert(out, { id = id, n = counts[id] })
+	end
+	return out
+end
+
+function Hud.hotbarItem(i: number): string?
+	return hotbar[i]
+end
+
 local hitT = 0
 local hurtT = 0
 local lastHp = -1
@@ -359,6 +405,8 @@ function Hud.update(dt: number)
 		refs.clockTime.Text = string.format("%02d:%02d", math.floor(h), math.floor((h % 1) * 60))
 		local phase = if h >= 22 or h < 6 then "Night" elseif h >= 18 then "Dusk" else "Day"
 		refs.clockSub.Text = phase .. "  Sunny"
+		local left = 9 * 24 - secs * Config.Clock.scale / 3600 -- game hours until the storm
+		refs.storm.Text = string.format("Next Storm Arrives In: %03d:%02d", math.floor(left), math.floor((left % 1) * 60))
 	end
 	-- vitals
 	local hp = player:GetAttribute("HP")
@@ -379,6 +427,12 @@ function Hud.update(dt: number)
 	if typeof(energy) == "number" then
 		refs.engFill.Size = UDim2.fromScale(1, math.clamp(energy / 100, 0, 1))
 	end
+	local load = player:GetAttribute("Load")
+	if typeof(load) == "number" then
+		local Wt = Config.Weight
+		refs.chip.Text = if load <= Wt.light then "🏃 Agile" elseif load > Wt.over then "⛔ Overweight" elseif load > Wt.heavy then "🐢 Heavy" else ""
+		refs.chip.TextColor3 = if load <= Wt.light then LIME elseif load > Wt.heavy then MAPLE else WHITE
+	end
 	hurtT = math.max(0, hurtT - dt * 2)
 	refs.hurt.ImageTransparency = 1 - hurtT * 0.6
 	-- weapon slots + ammo
@@ -386,6 +440,20 @@ function Hud.update(dt: number)
 	local slots = refs.slots
 	slots[1].name.Text = if typeof(gid) == "string" and Guns.items[gid] then Guns.items[gid].name else ""
 	slots[3].name.Text = "Stick"
+	table.clear(hotbar)
+	local counts = {}
+	for _, st in bagStacks() do
+		local def = Guns.items[st.id]
+		if def and def.use then
+			table.insert(hotbar, st.id)
+			counts[#hotbar] = st.n
+		end
+	end
+	for k = 1, 6 do
+		local id = hotbar[k]
+		local def = id and Guns.items[id]
+		slots[3 + k].name.Text = if def then string.format("%s\nx%d", def.name, counts[k]) else ""
+	end
 	for i, s in slots do
 		local active = (i == 1 and PC.held == "gun") or (i == 3 and PC.held == "melee")
 		local st = s.frame:FindFirstChildOfClass("UIStroke")
@@ -423,6 +491,11 @@ function Hud.update(dt: number)
 	refs.readout.TextColor3 = if g and d > Guns.range(g) then MAPLE elseif g and d > Guns.range(g) * 0.5 then GOLD else LIME
 	hitT = math.max(0, hitT - dt * 4)
 	refs.hit.TextTransparency = 1 - hitT
+	-- item use progress over the beaver
+	local useUntil, useStart = player:GetAttribute("UseUntil"), player:GetAttribute("UseStart")
+	if player:GetAttribute("UseId") and typeof(useUntil) == "number" and typeof(useStart) == "number" then
+		Hud.setProgress((Workspace:GetServerTimeNow() - useStart) / math.max(0.01, useUntil - useStart), Vector3.new(PC.pos.X, 1, PC.pos.Y))
+	end
 	-- extraction countdown
 	local exT = player:GetAttribute("ExtractLeft")
 	if typeof(exT) == "number" and exT > 0 then

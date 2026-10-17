@@ -14,6 +14,7 @@ local Config = require(Shared.Config)
 local PC = require(script.Parent.PlayerControl)
 local CameraRig = require(script.Parent.CameraRig)
 local Fx = require(script.Parent.Fx)
+local Vision = require(script.Parent.Vision)
 
 local player = Players.LocalPlayer
 local Combat = {}
@@ -21,6 +22,7 @@ local Combat = {}
 local held = false -- LMB down
 local pressed = false -- a trigger press this frame
 local fireCd = 0
+local meleeCd = 0
 local burstLeft = 0
 local scatter = -1
 local predictedMag: number? = nil
@@ -167,7 +169,10 @@ local function fire(g: any, id: string)
 		local off = if n > 1 then -fan / 2 + i * step else 0
 		yaws[i + 1] = base + off + (math.random() - 0.5) * scatterRad
 	end
-	Net.event("Fire"):FireServer(mz, yaws, slope)
+	-- crit: the cursor on an enemy head collider (InputManager.AimingEnemyHead)
+	local c = Combat.cursor()
+	local head = Vision.headUnder(c.X, c.Y) ~= nil
+	Net.event("Fire"):FireServer(mz, yaws, slope, head)
 	for _, a in yaws do
 		Fx.tracer(mz, a, slope, g.BulletSpeed, Guns.range(g), true)
 	end
@@ -209,9 +214,23 @@ function Combat.update(dt: number)
 	fireCd = math.max(0, fireCd - dt)
 	local reloading = Combat.reloading()
 	PC.actionRun = not reloading
+	local using = player:GetAttribute("UseId") ~= nil
+	PC.actionRun = PC.actionRun and not using
+	if PC.held == "melee" then
+		meleeCd = math.max(0, meleeCd - dt)
+		if pressed and meleeCd <= 0 and not PC.dashing() and not PC.blocked and not using then
+			local m = Config.Melee.stick
+			meleeCd = 1 / m.attackSpeed
+			PC.meleeAnim = 1
+			Net.event("Melee"):FireServer()
+			CameraRig.shake(0.1, "melee", Vector2.new(math.sin(PC.facing), math.cos(PC.facing)))
+		end
+		pressed = false
+		return
+	end
 	local auto = typeof(id) == "string" and Guns.auto(id)
 	local want = if auto then held else pressed
-	if g and want and fireCd <= 0 and PC.triggerLock <= 0 and not PC.dashing() and not reloading and not PC.blocked then
+	if g and want and fireCd <= 0 and PC.triggerLock <= 0 and not PC.dashing() and not reloading and not PC.blocked and not using then
 		if Combat.mag() > 0 then
 			fire(g, id :: string)
 		elseif pressed then

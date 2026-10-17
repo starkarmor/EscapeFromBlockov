@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "project_root": "/Users/joel/Desktop/Vibecoding/Games/EscapeFromBlockov/roblox",
+  "revision": 2,
+  "updated_at": "2026-10-17T20:28:48+00:00",
+  "objective": "Native Roblox port of the Escape from Canuckov Ground Zero vertical slice: Roblox aesthetics, game feel 1:1 with the web build, multiplayer-ready; lobby/teamwork/monetization/social after the slice",
+  "status": "working",
+  "source_authority": {
+    "rojo": "roblox/default.project.json",
+    "serve": "rojo serve --port 34872 (plugin connected by the user)",
+    "place": "roblox/EscapeFromBlockov.rbxl (build artifact, gitignored)"
+  },
+  "studio": {
+    "status": "unverified",
+    "studio_id": null,
+    "observed_at": null
+  },
+  "tool_access": {
+    "status": "unverified",
+    "observed_at": null
+  },
+  "constraints": [
+    "Never close/reopen/save the place from automation: Rojo live sync only (save dialogs are invisible to the agent)",
+    "Subagents use model sonnet, max 2",
+    "Close every browser opened"
+  ],
+  "consulted_skills": [],
+  "decisions": [
+    "1 m = 3.5 studs",
+    "Layout/colliders/loot/spawners exported from the running web build (tools/export_map.mjs) -> tools/convert_map.py",
+    "Beaver custom rig from the web rig (tools/export_rigs.mjs), source clips on flat Motor6D rigs",
+    "Client-owned ball root with the web's kinematics; server-authoritative bullets, damage, loot"
+  ],
+  "evidence": [],
+  "known_limitations": [],
+  "next_actions": [
+    "Get screenshot access (Screen Recording or Studio MCP toggle)",
+    "Fog of war, melee, hotbar items, doors, construction sites, boss"
+  ],
+  "pending_jobs": [],
+  "pending_work": [
+    {
+      "task": "see docs/port-ledger.json open list",
+      "acceptance": "matched web vs Roblox screenshots + real-input checks"
+    }
+  ],
+  "scope": [
+    "Ground Zero raid only (no bunker yet)",
+    "co-op multiplayer in one server",
+    "Roblox toy look per docs/art-brief.md"
+  ],
+  "selected_skills": []
+}

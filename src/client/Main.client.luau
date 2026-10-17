@@ -15,6 +15,8 @@ local Hud = require(script.Parent.Hud)
 local Combat = require(script.Parent.Combat)
 local Interact = require(script.Parent.Interact)
 local Results = require(script.Parent.Results)
+local Vision = require(script.Parent.Vision)
+local DayNight = require(script.Parent.DayNight)
 
 local player = Players.LocalPlayer
 local S = Units.S
@@ -42,12 +44,36 @@ ContextActionService:BindActionAtPriority("CanuckDodge", function(_, state)
 	return Enum.ContextActionResult.Sink
 end, false, 3000, Enum.KeyCode.Space)
 
+local Net = require(Shared.Net)
+local SLOT_KEYS = { [Enum.KeyCode.Three] = 1, [Enum.KeyCode.Four] = 2, [Enum.KeyCode.Five] = 3, [Enum.KeyCode.Six] = 4, [Enum.KeyCode.Seven] = 5, [Enum.KeyCode.Eight] = 6 }
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed or PC.blocked then
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.One then
+		PC.held = "gun"
+		Net.event("SelectSlot"):FireServer("gun")
+	elseif input.KeyCode == Enum.KeyCode.V then
+		PC.held = "melee"
+		Net.event("SelectSlot"):FireServer("melee")
+	elseif SLOT_KEYS[input.KeyCode] then
+		local id = Hud.hotbarItem(SLOT_KEYS[input.KeyCode])
+		if id then
+			Net.event("UseItem"):FireServer(id)
+		end
+	end
+end)
+
 local snapped = false
 RunService:BindToRenderStep("Canuckov3C", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	dt = math.min(dt, 0.1)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then
+		Vision.fan(false)
+		Vision.update()
+		DayNight.update()
+		Hud.update(dt)
 		return
 	end
 	local cursor = Combat.cursor()
@@ -68,6 +94,9 @@ RunService:BindToRenderStep("Canuckov3C", Enum.RenderPriority.Camera.Value + 1, 
 		inputBlocked = PC.blocked,
 	})
 	Interact.update(dt)
+	Vision.update()
+	Vision.fan(true)
+	DayNight.update()
 	CharAnim.localState = PC.animState()
 	Hud.update(dt)
 end)
