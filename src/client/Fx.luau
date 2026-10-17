@@ -143,6 +143,120 @@ function Fx.explode(at: Vector3, radius: number)
 	end)
 end
 
+-- ------------------------------------------------------------------ blood (World.burst / addDecal, Character flash)
+type Cube = { part: Part, v: Vector3, life: number, t: number }
+local cubes: { Cube } = {}
+local cubePool: { Part } = {}
+local function cube(at: Vector3, color: Color3, speed: number)
+	local p = table.remove(cubePool) or neon(Vector3.one * 0.13 * S, CFrame.new(), color)
+	p.Material = Enum.Material.SmoothPlastic
+	p.Color = color
+	p.Transparency = 0
+	p.Size = Vector3.one * 0.13 * S
+	p.CFrame = CFrame.new(at * S)
+	p.Parent = folder
+	-- vx, vz = +-speed / 2, vy = rand * 0.8 * speed + 1; life 0.3-0.6 s; gravity 14; floor 0.05 m
+	local v = Vector3.new((math.random() - 0.5) * speed, math.random() * 0.8 * speed + 1, (math.random() - 0.5) * speed)
+	table.insert(cubes, { part = p, v = v, life = 0.3 + math.random() * 0.3, t = 0 })
+end
+
+function Fx.burst(at: Vector3, color: Color3, n: number, speed: number)
+	for _ = 1, n do
+		if #cubes < 100 then
+			cube(at, color, speed)
+		end
+	end
+end
+
+-- 40 ground decals (r 0.45 m circles, #5a1410), round-robin, life 25 s, opacity min(0.75, life / 5)
+local DECAL = Color3.fromHex("#5a1410")
+local decals: { { part: Part, life: number } } = {}
+local decalNext = 1
+function Fx.decal(x: number, z: number, scale: number)
+	local d = decals[decalNext]
+	if not d then
+		local p = Instance.new("Part")
+		p.Shape = Enum.PartType.Cylinder
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Material = Enum.Material.SmoothPlastic
+		p.Color = DECAL
+		p.Parent = folder
+		d = { part = p, life = 0 }
+		decals[decalNext] = d
+	end
+	local k = scale * (0.7 + math.random() * 0.6)
+	d.part.Size = Vector3.new(0.02 * S, 0.9 * S * k, 0.9 * S * k)
+	d.part.CFrame = CFrame.new(x * S, 0.05 * S, z * S) * CFrame.Angles(0, 0, math.pi / 2)
+	d.life = 25
+	decalNext = decalNext % 40 + 1
+end
+
+--- hit flash: a white (enemy) / orange #ffb347 (player) overlay for 0.125 s, then the emissive decay at 8 / s
+function Fx.flash(model: Model?, color: Color3)
+	if not model or not model.Parent then
+		return
+	end
+	local h = model:FindFirstChild("HitFlash") :: Highlight?
+	if not h then
+		h = Instance.new("Highlight")
+		h.Name = "HitFlash"
+		h.OutlineTransparency = 1
+		h.DepthMode = Enum.HighlightDepthMode.Occluded
+		h.Parent = model
+	end
+	h.FillColor = color
+	h.FillTransparency = 0.15
+	h.Enabled = true
+	local token = os.clock()
+	h:SetAttribute("T", token)
+	task.spawn(function()
+		task.wait(0.125)
+		local a = 0.6
+		while a > 0 and h.Parent and h:GetAttribute("T") == token do
+			local dt = task.wait()
+			a -= dt * 8 * 0.6
+			h.FillTransparency = 1 - math.max(0, a)
+		end
+		if h.Parent and h:GetAttribute("T") == token then
+			h.Enabled = false
+		end
+	end)
+end
+
+local ENEMY_BLOOD = Color3.fromHex("#b0161b")
+local PLAYER_BLOOD = Color3.fromHex("#c8392f")
+--- one hit as World.applyHit draws it
+function Fx.hit(h: any)
+	local at: Vector3 = h.at
+	if h.kind == "enemy" then
+		local n = if h.kill then 26 elseif h.crit then 10 else 6
+		Fx.burst(at, ENEMY_BLOOD, n, if h.kill then 6 else 4)
+		if not h.kill then
+			Fx.flash(h.model, Color3.new(1, 1, 1))
+		end
+		if h.byPlayer then
+			if h.kill then
+				Fx.decal(at.X, at.Z, 1.6)
+				for _ = 1, 6 do
+					Fx.decal(at.X + (math.random() - 0.5) * 2.4, at.Z + (math.random() - 0.5) * 2.4, 0.7 + math.random() * 1.1)
+				end
+			else
+				Fx.decal(at.X + (math.random() - 0.5) * 0.6, at.Z + (math.random() - 0.5) * 0.6, 0.8)
+			end
+		end
+	elseif h.kind == "player" then
+		Fx.burst(at, PLAYER_BLOOD, 5, 4)
+		Fx.flash(h.model, Color3.fromHex("#ffb347"))
+		if h.bullet then
+			Fx.decal(at.X, at.Z, 0.7)
+		end
+	end
+end
+
 -- hit marker + damage numbers live in the HUD gui (Hud.luau owns the ScreenGui; it registers these)
 Fx.onHitMarker = nil :: ((boolean, boolean) -> ())?
 Fx.onDamage = nil :: ((Vector3, number, boolean) -> ())?
@@ -160,6 +274,29 @@ function Fx.damageNumber(at: Vector3, dmg: number, crit: boolean)
 end
 
 RunService.RenderStepped:Connect(function(dt)
+	for i = #cubes, 1, -1 do
+		local c = cubes[i]
+		c.t += dt
+		if c.t >= c.life then
+			c.part.Parent = nil
+			table.insert(cubePool, c.part)
+			table.remove(cubes, i)
+		else
+			c.v -= Vector3.new(0, 14 * dt, 0)
+			local p = c.part.Position / S + c.v * dt
+			if p.Y < 0.05 then
+				p = Vector3.new(p.X, 0.05, p.Z)
+				c.v = Vector3.new(c.v.X * 0.5, 0, c.v.Z * 0.5)
+			end
+			c.part.CFrame = CFrame.new(p * S)
+		end
+	end
+	for _, d in decals do
+		if d.life > 0 then
+			d.life -= dt
+			d.part.Transparency = 1 - math.min(0.75, math.max(0, d.life) / 5)
+		end
+	end
 	for i = #tracers, 1, -1 do
 		local t = tracers[i]
 		t.t += dt

@@ -85,34 +85,33 @@ local function rand(a: number, b: number): number
 	return a + (b - a) * math.random()
 end
 
-local corpseHook: ((Vector3, string, string) -> ())? = nil
-function Enemies.onCorpse(fn: (Vector3, string, string) -> ())
+local corpseHook: ((Vector3, string, string, Model, string?) -> ())? = nil
+function Enemies.onCorpse(fn: (Vector3, string, string, Model, string?) -> ())
 	corpseHook = fn
 end
 
+local XP = { scrapper = 15, scav = 20, brute = 40, contractor = 250, boss = 1000, wolf = 50 }
 local function die(e: Enemy, info: any)
 	if e.state == "dead" then
 		return
 	end
 	e.state = "dead"
 	Weapons.targets[e] = nil
-	local p = pos2(e)
-	if corpseHook then
-		corpseHook(Vector3.new(p.X, 0, p.Y), e.def.name, e.def.kind)
-	end
-	-- a short topple then remove (the loot stays as a corpse container)
-	e.root.Anchored = true
-	local cf = e.root.CFrame
-	e.model:SetAttribute("Dead", true)
-	task.spawn(function()
-		for i = 1, 10 do
-			e.root.CFrame = cf * CFrame.new(0, -i * 0.04 * S, 0) * CFrame.Angles(math.rad(i * 9), 0, 0)
-			task.wait(1 / 30)
-		end
-		task.wait(1.5)
-		e.model:Destroy()
-	end)
 	enemies[e.id] = nil
+	-- Enemy.update for the dead: falls on its back over 0.333 s (clients animate from DeadAt) and stays for the whole
+	-- raid; the body itself is the loot container ("Loot" / "Body"), no fade or despawn
+	e.root.AssemblyLinearVelocity = Vector3.zero
+	e.root.Anchored = true
+	e.model:SetAttribute("Dead", true)
+	e.model:SetAttribute("DeadAt", Workspace:GetServerTimeNow())
+	e.model:SetAttribute("HP", 0)
+	if info and info.from and Raid.addXp then
+		Raid.addXp(info.from, XP[e.def.kind] or 0)
+	end
+	if corpseHook then
+		local p = pos2(e)
+		corpseHook(Vector3.new(p.X, 0, p.Y), e.def.name, e.def.kind, e.model, e.gun)
+	end
 end
 
 local function hurt(e: Enemy, dmg: number, info: any): boolean
@@ -208,6 +207,7 @@ function Enemies.spawn(kind: string, x: number, z: number): Enemy
 			return hurt(e, dmg, info)
 		end,
 		ref = e,
+		model = model,
 	}
 	return e
 end
@@ -305,6 +305,7 @@ local function shoot(e: Enemy, at: Vector2)
 			from = nil,
 			fromRef = e,
 			fromName = e.def.name,
+			weaponId = e.gun,
 			bleed = 0.03,
 		})
 	end
@@ -381,7 +382,12 @@ local function think(e: Enemy, dt: number, players: { { p: Player, pos: Vector2 
 							local np = Raid.posOf(seen.p)
 							if np and (Vector2.new(np.X, np.Z) - pos2(e)).Magnitude <= m.range + 0.5 then
 								local crit = math.random() < m.critRate
-								Raid.hurt(seen.p, m.damage * e.def.dmgMul * (if crit then m.critMul else 1), { fromName = e.def.name, bleed = m.bleed })
+								local dmg = m.damage * e.def.dmgMul * (if crit then m.critMul else 1)
+								local t = Weapons.targets[seen.p]
+								local killed = Raid.hurt(seen.p, dmg, { fromName = e.def.name, weaponId = if e.def.kind == "wolf" then "animal_weapon" else "butcher_knife", crit = false, bleed = m.bleed })
+								if t then
+									Weapons.broadcastHit(t, np + Vector3.new(0, 0.7, 0), dmg, false, killed, nil, false)
+								end
 							end
 						end
 					end)

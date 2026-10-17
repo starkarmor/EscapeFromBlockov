@@ -83,8 +83,21 @@ function CharAnim.step(dt: number)
 		if (rp - focus).Magnitude > CULL then
 			continue
 		end
+		-- death (Enemy.update / World.update): fall on the back about the feet over 0.333 s (rotation 90 deg, rise 0.3 m), then
+		-- hold; the root is anchored by the server, the bones keep their last pose
+		local deadAt = model:GetAttribute("DeadAt")
+		local fall = CFrame.identity
+		local frozen = false
+		if typeof(deadAt) == "number" then
+			local t = math.clamp((now - deadAt) * 3, 0, 1)
+			local R = RigBuilder.ROOT_R
+			fall = CFrame.new(0, -R + 0.3 * S * t, 0) * CFrame.Angles(math.rad(90) * t, 0, 0) * CFrame.new(0, R, 0)
+			frozen = true
+		end
 		local st: Skel.AnimState
-		if model == me and CharAnim.localState then
+		if frozen then
+			st = { dt = 0, speed = 0, dirX = 0, dirZ = 1, aiming = false, melee = 0, dodge = 0 }
+		elseif model == me and CharAnim.localState then
 			st = CharAnim.localState
 			st.dt = dt
 		else
@@ -111,13 +124,15 @@ function CharAnim.step(dt: number)
 		if not e.skeletal then
 			-- quadruped (wolverine): its own skeleton is not ported; a procedural trot bob on the bind pose
 			e.phase += dt * math.max(0.6, st.speed / 1.2) * 2 * math.pi
-			local bob = CFrame.new(0, math.abs(math.sin(e.phase)) * 0.05 * S * math.min(1, st.speed), 0)
+			local bob = fall * CFrame.new(0, math.abs(math.sin(e.phase)) * 0.05 * S * math.min(1, st.speed), 0)
 			for _, jt in e.joints do
 				jt.j.Transform = jt.c0inv * bob * RigBuilder.partCFrame(e.world, 0, jt.rel, e.k)
 			end
 			continue
 		end
-		Skel.update(e.anim, st)
+		if not frozen or not e.anim.pose then
+			Skel.update(e.anim, st)
+		end
 		local world = Skel.fk(e.anim.pose, e.world)
 		local hand = world[HAND]
 		for _, jt in e.joints do
@@ -130,7 +145,7 @@ function CharAnim.step(dt: number)
 			else
 				cf = RigBuilder.partCFrame(world, jt.bone, jt.rel, e.k)
 			end
-			jt.j.Transform = jt.c0inv * cf
+			jt.j.Transform = jt.c0inv * fall * cf
 		end
 	end
 end

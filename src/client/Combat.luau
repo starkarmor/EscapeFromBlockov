@@ -19,6 +19,7 @@ local Sfx = require(script.Parent.Sfx)
 
 local player = Players.LocalPlayer
 local Combat = {}
+Combat.onSound = function(_at: Vector3) end
 
 local held = false -- LMB down
 local pressed = false -- a trigger press this frame
@@ -45,6 +46,11 @@ end
 function Combat.cursor(): Vector2
 	local m = mousePos()
 	return Vector2.new(m.X + R.x, m.Y + R.y)
+end
+
+--- current scatter in degrees (full cone) for the reticle spread
+function Combat.scatterDeg(): number
+	return math.max(0, scatter)
 end
 
 function Combat.mag(): number
@@ -214,9 +220,9 @@ function Combat.update(dt: number)
 	end
 	fireCd = math.max(0, fireCd - dt)
 	local reloading = Combat.reloading()
-	PC.actionRun = not reloading
 	local using = player:GetAttribute("UseId") ~= nil
-	PC.actionRun = PC.actionRun and not using
+	-- ACTIONS: reload allows moving and running; an item use allows moving, not running
+	PC.actionRun = not using
 	if PC.held == "melee" then
 		meleeCd = math.max(0, meleeCd - dt)
 		if pressed and meleeCd <= 0 and not PC.dashing() and not PC.blocked and not using then
@@ -225,7 +231,7 @@ function Combat.update(dt: number)
 			PC.meleeAnim = 1
 			Net.event("Melee"):FireServer()
 			Sfx.play("swoosh")
-			CameraRig.shake(0.1, "melee", Vector2.new(math.sin(PC.facing), math.cos(PC.facing)))
+			CameraRig.shake(0.05, "melee", Vector2.new(math.sin(PC.facing), math.cos(PC.facing)))
 		end
 		pressed = false
 		return
@@ -285,6 +291,9 @@ function Combat.start()
 			pressed = true
 		elseif input.KeyCode == Enum.KeyCode.R then
 			Net.event("Reload"):FireServer()
+		elseif input.KeyCode == Enum.KeyCode.X then
+			-- StopAction: cancels a reload, an item use or a hold
+			Net.event("StopAction"):FireServer()
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
@@ -293,10 +302,26 @@ function Combat.start()
 		end
 	end)
 	Net.event("Fx").OnClientEvent:Connect(function(kind: string, a: any, b: any, c: any, d: any, e: any)
+		if kind == "hit" then
+			Fx.hit(a)
+			if a.mine or a.me then
+				Fx.damageNumber(a.at, a.dmg, a.crit)
+			end
+			return
+		end
 		if kind == "shot" then
 			-- someone else's shot: a = muzzle (m), b = yaws, c = slope, d = speed, e = range
 			for _, yaw in b do
 				Fx.tracer(a, yaw, c, d, e, false)
+			end
+			-- a shot outside the view cone shows as a sound marker (WorldUI sound markers)
+			local rel = Vector2.new(a.X, a.Z) - PC.pos
+			if rel.Magnitude > 2 and rel.Magnitude < e * 2 then
+				local ang = math.atan2(rel.X, rel.Y)
+				local off = math.abs(math.atan2(math.sin(ang - PC.facing), math.cos(ang - PC.facing)))
+				if off > math.rad(50) or rel.Magnitude > 37 then
+					Combat.onSound(a)
+				end
 			end
 			Fx.muzzle(a, b[1])
 			Sfx.at(if d >= 100 then "rifle" else "pistol", a, 60)
@@ -319,11 +344,11 @@ function Combat.start()
 			Sfx.at("impact", a, 25)
 		end
 	end)
-	Net.event("Hit").OnClientEvent:Connect(function(kill: boolean, crit: boolean, at: Vector3?, dmg: number?)
-		Fx.hitMarker(kill, crit)
-		Sfx.play("hitmarker")
-		if at and dmg then
-			Fx.damageNumber(at, dmg, crit)
+	-- hit marker for the player's own hits (damage > 1.01 or a kill); the number comes with the "hit" fx
+	Net.event("Hit").OnClientEvent:Connect(function(kill: boolean, crit: boolean, _at: Vector3?, dmg: number?)
+		if kill or (dmg or 0) > 1.01 then
+			Fx.hitMarker(kill, crit)
+			Sfx.play("hitmarker")
 		end
 	end)
 end

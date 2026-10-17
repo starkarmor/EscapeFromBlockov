@@ -33,6 +33,14 @@ if ok and controls then
 	controls:Disable()
 end
 UserInputService.MouseIconEnabled = false
+-- the chat window would sit over the web HUD's top-left clock and swallow clicks there: dock it right-centre
+pcall(function()
+	local cw = game:GetService("TextChatService"):WaitForChild("ChatWindowConfiguration", 5)
+	if cw then
+		cw.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		cw.VerticalAlignment = Enum.VerticalAlignment.Center
+	end
+end)
 
 CharAnim.start()
 Hud.start()

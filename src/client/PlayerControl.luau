@@ -37,6 +37,7 @@ PC.slot = 1 -- 1 / 2 firearms, 3 melee (the HUD highlight)
 PC.blocked = false -- a UI panel owns input (loot window or inventory)
 PC.lootOpen = false
 PC.invOpen = false
+PC.resultOpen = false
 PC.actionMove = true -- the running action allows moving (reload yes, interact no)
 PC.actionRun = true
 PC.moveability = 1
@@ -91,7 +92,7 @@ function PC.update(dt: number, cursor: Vector2)
 		return
 	end
 	clock += dt
-	PC.blocked = PC.lootOpen or PC.invOpen
+	PC.blocked = PC.lootOpen or PC.invOpen or PC.resultOpen
 	PC.meleeAnim = math.max(0, PC.meleeAnim - dt * 5)
 	local p = r.Position
 	PC.pos = Vector2.new(p.X / S, p.Z / S)

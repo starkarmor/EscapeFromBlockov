@@ -138,6 +138,12 @@ local function render()
 	weightLabel.Text = string.format("Weight %.1f / %d kg", typeof(w) == "number" and w or 0, Config.Weight.carry)
 end
 
+--- the loot window opens the backpack beside it (left of centre), like the web's inventory + loot pane
+function Inventory.side(on: boolean)
+	panel.AnchorPoint = if on then Vector2.new(0, 0.5) else Vector2.new(0.5, 0.5)
+	panel.Position = if on then UDim2.new(0, 60, 0.5, 0) else UDim2.fromScale(0.5, 0.5)
+end
+
 function Inventory.toggle(on: boolean?)
 	Inventory.open = if on == nil then not Inventory.open else on
 	panel.Visible = Inventory.open

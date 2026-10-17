@@ -61,6 +61,41 @@
    "system": "performance",
    "evidence": "60 fps in Play with 33k map parts, ~40 geese, vision + fan (15 fps only when Studio is in the background)",
    "method": "telemetry"
+  },
+  {
+   "system": "front-end UX pass",
+   "evidence": "HUD rebuilt from duckov.css/Hud.ts at 2560x1440 reference: clock + storm line, statuses, HP pill with lag/flash, water/energy rings, armor, weapon buttons with the gun model, hotbar 3-8, ammo block, distance pill, controls panel (O), calm dim after 4 s",
+   "method": "Play screenshots"
+  },
+  {
+   "system": "reload feedback",
+   "evidence": "cursor reload ring (60, dark 15 + #F4FBFF 5 clockwise) + mag box at the cursor; 'Out of ammo' toast; run allowed while reloading; X cancels; melee/use/dodge cancel",
+   "method": "real R key, screenshot"
+  },
+  {
+   "system": "hits and blood",
+   "evidence": "blood cubes (enemy #b0161b 6/10/26, player #c8392f 5), 40 ground decals #5a1410 (25 s), white / orange hit flash, damage numbers (one decimal, crit lightning), hit marker bars hm/hmk keyframes, nameplate blink + pop + lag",
+   "method": "real fire on a goose, screenshots"
+  },
+  {
+   "system": "death and bodies",
+   "evidence": "enemies fall on their back over 0.333 s and stay as 'Loot'/'Body' containers (unrevealed carried loot); player falls, 1.5 s later YOU DIED / 'Scrappy Goose (TOZ-66)' / EXP / Continue -> 'You went down' curtain with tip + Click to Continue -> redeploy; the beaver's body stays as 'Lost Items' with a cyan beacon",
+   "method": "real play, screenshots"
+  },
+  {
+   "system": "loot containers",
+   "evidence": "all 18 container types use script-free Creator Store models fitted to the web footprints, non-colliding, nudged out of map props, 0.02 stud lift (no z-fighting)",
+   "method": "inspect + screenshots"
+  },
+  {
+   "system": "loot pane",
+   "evidence": "right 640 panel, title + (count/slots), striped unrevealed slots, spinning magnifier on the slot being searched, quality glow colours, double-click / F take, pickup tone per reveal, backpack opens beside it",
+   "method": "real F on a body, screenshot"
+  },
+  {
+   "system": "vision fan",
+   "evidence": "seamless SurfaceGui sector, lit cone follows the facing (checked cursor right and up-left)",
+   "method": "screenshots"
   }
  ],
  "open": [
@@ -98,16 +133,28 @@
    "next": "port the quad rig clips"
   },
   {
-   "gap": "BillboardGui labels (player names, EXTRACT/BUNKER) not visible in MCP captures",
-   "next": "check in a real client; switch to screen-projected labels if they do not render"
-  },
-  {
    "gap": "audio ids are Creator Store community uploads",
    "next": "replace with owned/licensed SFX before publishing"
   },
   {
    "gap": "art: props are restyled collider blocks; grass, river surface, beaver/goose detail",
    "next": "art pass per docs/art-brief.md"
+  },
+  {
+   "gap": "dodge roll i-frames vs explosions, piles from dropped items, Collect All (not rendered in the web either)",
+   "next": "later"
+  },
+  {
+   "gap": "item / weapon icons are names (the web has SVG icons)",
+   "next": "icon pass"
+  },
+  {
+   "gap": "the tomb appears at the death spot in the same running server (the source shows it in a later raid; co-op adaptation)",
+   "next": "confirm with the user"
+  },
+  {
+   "gap": "Creator Store models live in the open place (ReplicatedStorage/CreatorAssets); not in Rojo",
+   "next": "save the place; tools/import_assets.py rebuilds it"
   }
  ]
 }

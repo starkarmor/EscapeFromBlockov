@@ -317,6 +317,10 @@ for m in d['meshes']:
         cat &= ~1
     collide = bool(cat & 1) and kind != 'rock'
     a = {'Cat': cat, 'Kind': kind}
+    if kind not in ('rock', 'cap'):
+        g0 = solid_grp.get((round(p[0], 2), round(p[2], 2)))
+        if g0:
+            a['Grp'] = _re.sub(r'_?\d+$', '', g0)[:40]
     pt = part(kind.capitalize(), 'Part', pos, size, rgb, R, collide=collide, material=mat, attrs=a,
               shape=2 if t == 'cyl' else None, query=cat != 0 and kind != 'rock', cast=kind not in ('cap',), group='M%d' % (cat if kind != 'rock' else 0))
     (rocks if kind == 'rock' else caps if kind == 'cap' else bushes if kind == 'fow' else props).append(pt)

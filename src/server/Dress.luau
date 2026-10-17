@@ -114,6 +114,64 @@ local function dressBushes(map: Instance)
 	return n
 end
 
+-- rocks: the band nearest the floor (the web's 1.3 m stand-ins) becomes low-poly rock meshes tiled along each rect;
+-- the grid colliders are untouched (rock blocks never collided)
+local ROCK1 = Color3.fromRGB(0x8A, 0x84, 0x7A)
+local function dressRocks(map: Instance): number
+	local rocks = map:FindFirstChild("Rocks")
+	if not rocks or not (template("Rock") or template("Rock2")) then
+		return 0
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "RockMeshes"
+	local n = 0
+	for _, r in rocks:GetChildren() do
+		if not r:IsA("BasePart") or (r.Color.R - ROCK1.R) ^ 2 + (r.Color.G - ROCK1.G) ^ 2 > 0.002 then
+			continue
+		end
+		local size = r.Size
+		local longX = size.X >= size.Z
+		local len = if longX then size.X else size.Z
+		local wid = if longX then size.Z else size.X
+		local step = math.max(wid, 1.2 * S)
+		local count = math.clamp(math.floor(len / step + 0.5), 1, 12)
+		local axis = if longX then r.CFrame.RightVector else r.CFrame.LookVector
+		for i = 1, count do
+			local off = (i - 0.5) / count * len - len / 2
+			local name = if (n % 2 == 0 and template("Rock2")) then "Rock2" else "Rock"
+			local m = sized(name, size.Y * 1.15, "Y")
+			if m then
+				local _, bs = m:GetBoundingBox()
+				local foot = math.max(bs.X, bs.Z)
+				local want = math.max(step, wid) * 1.25
+				if foot > 0 then
+					m:ScaleTo(m:GetScale() * want / foot)
+				end
+				local base = r.Position - Vector3.new(0, size.Y / 2, 0) + axis * off
+				m:PivotTo(CFrame.new(base) * CFrame.Angles(0, math.random() * math.pi * 2, 0))
+				-- the rock bands' colours (the store mesh is near-white and read as snow)
+				local tone = ({ Color3.fromRGB(0x8A, 0x84, 0x7A), Color3.fromRGB(0x76, 0x70, 0x67), Color3.fromRGB(0x9A, 0x94, 0x8A) })[math.random(1, 3)]
+				for _, d in m:GetDescendants() do
+					if d:IsA("MeshPart") then
+						d.TextureID = "" -- the store texture overrides Color
+					end
+					if d:IsA("SurfaceAppearance") or d:IsA("Texture") or d:IsA("Decal") then
+						d:Destroy()
+					elseif d:IsA("BasePart") and d.Transparency < 1 then
+						d.Color = tone
+						d.Material = Enum.Material.Plastic
+					end
+				end
+				m.Parent = folder
+				n += 1
+			end
+		end
+		r.Transparency = 1
+	end
+	folder.Parent = map
+	return n
+end
+
 -- gun id -> model by the decoded item: shotguns (SHT / pellets), pistols (length <= 0.55 m), SMGs (0.7 m), rifles
 -- (>= 0.9 m and every AK-family id)
 local function gunModel(id: string): string
@@ -194,7 +252,8 @@ function Dress.start()
 	local map = Workspace:WaitForChild("GroundZero")
 	local t = dressTrees(map)
 	local b = dressBushes(map)
-	print(string.format("[Canuckov] dressed %d pines, %d bushes", t, b))
+	local rk = dressRocks(map)
+	print(string.format("[Canuckov] dressed %d pines, %d bushes, %d rocks", t, b, rk))
 	-- held guns on every character (players: the player's Gun attribute; enemies: their own "Gun" attribute)
 	local function watch(char: Model)
 		local function refresh()

@@ -1,14 +1,146 @@
 {
-  "note": "Creator Store assets used in the game. Imported into ReplicatedStorage/CreatorAssets by tools/import_assets.py (Studio MCP insert_asset), scripts stripped, normalised. Rojo does not manage that folder; re-run the tool on a fresh place. Rights: free listings, re-check before publishing (docs/creator-store-scout.md).",
-  "assets": {
-    "Pine":      {"id": "5616880673", "creator": "see store", "role": "terrain pine trees (473)", "fit": "height"},
-    "Bush":      {"id": "7191673673", "role": "foliage (fow) lines", "fit": "height"},
-    "Rock":      {"id": "121683951170092", "role": "rock dressing", "fit": "height"},
-    "GunPistol": {"id": "15284785812", "role": "held pistols", "fit": "length"},
-    "GunRifle":  {"id": "4762550889", "role": "held rifles / AK family", "fit": "length"},
-    "GunShotgun":{"id": "102599014388952", "role": "held shotguns", "fit": "length"},
-    "GunSmg":    {"id": "6169371009", "role": "held SMGs", "fit": "length"},
-    "Barrel":    {"id": "5228772587", "role": "explosive oil barrels", "fit": "height"},
-    "Container": {"id": "8473839456", "role": "container yard", "fit": "length"}
+ "note": "Creator Store assets used in the game. Imported into ReplicatedStorage/CreatorAssets by tools/import_assets.py (Studio MCP insert_asset), scripts stripped, normalised. Rojo does not manage that folder; re-run the tool on a fresh place. Rights: free listings, re-check before publishing (docs/creator-store-scout.md).",
+ "assets": {
+  "Pine": {
+   "id": "5616880673",
+   "creator": "see store",
+   "role": "terrain pine trees (473)",
+   "fit": "height"
+  },
+  "Bush": {
+   "id": "7191673673",
+   "role": "foliage (fow) lines",
+   "fit": "height"
+  },
+  "Rock": {
+   "id": "121683951170092",
+   "role": "rock dressing",
+   "fit": "height"
+  },
+  "GunPistol": {
+   "id": "15284785812",
+   "role": "held pistols",
+   "fit": "length"
+  },
+  "GunRifle": {
+   "id": "4762550889",
+   "role": "held rifles / AK family",
+   "fit": "length"
+  },
+  "GunShotgun": {
+   "id": "102599014388952",
+   "role": "held shotguns",
+   "fit": "length"
+  },
+  "GunSmg": {
+   "id": "6169371009",
+   "role": "held SMGs",
+   "fit": "length"
+  },
+  "Barrel": {
+   "id": "5228772587",
+   "role": "explosive oil barrels",
+   "fit": "height"
+  },
+  "Container": {
+   "id": "8473839456",
+   "role": "container yard",
+   "fit": "length"
+  },
+  "C_toolbox": {
+   "id": "15162636282",
+   "role": "loot container: toolbox",
+   "fit": "web container size"
+  },
+  "C_crate": {
+   "id": "5558873441",
+   "role": "loot container: crate",
+   "fit": "web container size"
+  },
+  "C_ammobox": {
+   "id": "16382915010",
+   "role": "loot container: ammobox",
+   "fit": "web container size"
+  },
+  "C_explorer": {
+   "id": "3622226689",
+   "role": "loot container: explorer",
+   "fit": "web container size"
+  },
+  "C_cabinet": {
+   "id": "10500675980",
+   "role": "loot container: cabinet",
+   "fit": "web container size"
+  },
+  "C_hidden": {
+   "id": "129289305773225",
+   "role": "loot container: hidden",
+   "fit": "web container size"
+  },
+  "C_clothes": {
+   "id": "13999165725",
+   "role": "loot container: clothes",
+   "fit": "web container size"
+  },
+  "C_daily": {
+   "id": "6782185708",
+   "role": "loot container: daily",
+   "fit": "web container size"
+  },
+  "C_medbox": {
+   "id": "10672787203",
+   "role": "loot container: medbox",
+   "fit": "web container size"
+  },
+  "C_weaponcrate": {
+   "id": "2930926216",
+   "role": "loot container: weaponcrate",
+   "fit": "web container size"
+  },
+  "C_weaponcase": {
+   "id": "491038178",
+   "role": "loot container: weaponcase",
+   "fit": "web container size"
+  },
+  "C_starter": {
+   "id": "129289305773225",
+   "role": "loot container: starter",
+   "fit": "web container size"
+  },
+  "C_tech": {
+   "id": "199426445",
+   "role": "loot container: tech",
+   "fit": "web container size"
+  },
+  "C_cardoor": {
+   "id": "9392387817",
+   "role": "loot container: cardoor",
+   "fit": "web container size"
+  },
+  "C_trash": {
+   "id": "16369132590",
+   "role": "loot container: trash",
+   "fit": "web container size"
+  },
+  "Rock2": {
+   "id": "130260542676735",
+   "role": "rock variant",
+   "fit": "web container size"
+  },
+  "C_cooler": {
+   "id": "5221805197",
+   "role": "loot container: cooler",
+   "fit": "web container size"
+  },
+  "C_toilet": {
+   "id": "59688505",
+   "role": "loot container: toilet",
+   "fit": "web container size"
+  },
+  "C_luxury": {
+   "id": "1241751394",
+   "role": "loot container: luxury",
+   "fit": "web container size"
   }
+ }
 }

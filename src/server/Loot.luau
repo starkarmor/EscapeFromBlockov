@@ -106,19 +106,27 @@ local function roll(row: any): { Item }
 	return out
 end
 
--- container look (data.ts CONTAINER_LOOK sizes, art-brief colours)
+-- container footprint (data.ts CONTAINER_LOOK sizes, metres: w along x, h, d along z); the look is the Creator Store
+-- model "C_<type>" (docs/creator-assets.json) fitted to this footprint, else a plain block in the web colour
 local LOOK: { [string]: { size: Vector3, color: Color3 } } = {
-	crate = { size = Vector3.new(1.1, 0.8, 1.1), color = Color3.fromHex("#C28A4A") },
-	toolbox = { size = Vector3.new(0.9, 0.5, 0.5), color = Color3.fromHex("#E8322E") },
-	cooler = { size = Vector3.new(0.9, 0.6, 0.6), color = Color3.fromHex("#13A5F4") },
-	medbox = { size = Vector3.new(0.9, 0.6, 0.6), color = Color3.fromHex("#FFF8E9") },
-	ammobox = { size = Vector3.new(0.8, 0.45, 0.5), color = Color3.fromHex("#6E8A3A") },
-	weaponcase = { size = Vector3.new(1.4, 0.5, 0.7), color = Color3.fromHex("#4A5A4A") },
-	weaponcrate = { size = Vector3.new(1.4, 0.7, 0.8), color = Color3.fromHex("#5C6E4A") },
-	cabinet = { size = Vector3.new(0.9, 1.6, 0.5), color = Color3.fromHex("#B9BCC4") },
-	luxury = { size = Vector3.new(1.0, 0.6, 0.7), color = Color3.fromHex("#FFD83D") },
-	hidden = { size = Vector3.new(0.7, 0.4, 0.7), color = Color3.fromHex("#8A5A2B") },
-	corpse = { size = Vector3.new(1.0, 0.35, 1.0), color = Color3.fromHex("#9938F2") },
+	crate = { size = Vector3.new(1.1, 0.8, 1.1), color = Color3.fromHex("#a77d48") },
+	toolbox = { size = Vector3.new(0.9, 0.5, 0.5), color = Color3.fromHex("#c2412f") },
+	cooler = { size = Vector3.new(0.9, 0.6, 0.6), color = Color3.fromHex("#3f8fc0") },
+	medbox = { size = Vector3.new(0.9, 0.6, 0.6), color = Color3.fromHex("#d9dcd8") },
+	ammobox = { size = Vector3.new(0.8, 0.45, 0.5), color = Color3.fromHex("#5a6b3a") },
+	weaponcase = { size = Vector3.new(1.4, 0.5, 0.7), color = Color3.fromHex("#3f4a3a") },
+	weaponcrate = { size = Vector3.new(1.5, 0.75, 0.8), color = Color3.fromHex("#4a5a36") },
+	cabinet = { size = Vector3.new(1.0, 1.7, 0.6), color = Color3.fromHex("#6d7a86") },
+	clothes = { size = Vector3.new(1.2, 1.6, 0.4), color = Color3.fromHex("#8a6d5a") },
+	toilet = { size = Vector3.new(0.5, 0.8, 0.7), color = Color3.fromHex("#e4e4dc") },
+	trash = { size = Vector3.new(0.6, 0.9, 0.6), color = Color3.fromHex("#4c5a4c") },
+	luxury = { size = Vector3.new(0.8, 0.4, 0.5), color = Color3.fromHex("#7a4a8a") },
+	tech = { size = Vector3.new(1.0, 0.6, 0.6), color = Color3.fromHex("#3a6f8a") },
+	explorer = { size = Vector3.new(0.7, 0.5, 0.5), color = Color3.fromHex("#b89a4a") },
+	hidden = { size = Vector3.new(1.0, 0.25, 1.0), color = Color3.fromHex("#6e5536") },
+	daily = { size = Vector3.new(0.9, 0.7, 0.6), color = Color3.fromHex("#b8a07a") },
+	starter = { size = Vector3.new(0.9, 0.6, 0.6), color = Color3.fromHex("#8a9a5a") },
+	cardoor = { size = Vector3.new(1.2, 1.0, 0.15), color = Color3.fromHex("#5a6470") },
 }
 local DEFAULT_LOOK = { size = Vector3.new(0.9, 0.6, 0.7), color = Color3.fromHex("#D0BA78") }
 
@@ -126,34 +134,104 @@ local folder = Instance.new("Folder")
 folder.Name = "Loot"
 folder.Parent = Workspace
 
+local mapParams = OverlapParams.new()
+mapParams.FilterType = Enum.RaycastFilterType.Include
+mapParams.RespectCanCollide = false
+
+--- a model fitted to a footprint (studs): uniform scale so it fills the footprint's larger horizontal side, its long
+--- horizontal axis turned onto the footprint's long axis, height capped at 1.4x the footprint height
+local function fitted(name: string, foot: Vector3): Model?
+	local assets = ReplicatedStorage:FindFirstChild("CreatorAssets")
+	local t = assets and assets:FindFirstChild(name) :: Model?
+	if not t then
+		return nil
+	end
+	local m = t:Clone()
+	local s0 = m:GetAttribute("Size0") :: Vector3
+	local modelLong, footLong = math.max(s0.X, s0.Z), math.max(foot.X, foot.Z)
+	local k = footLong / modelLong
+	if s0.Y * k > foot.Y * 1.4 then
+		k = foot.Y * 1.4 / s0.Y
+	end
+	m:ScaleTo(k)
+	local turn = (s0.X >= s0.Z) ~= (foot.X >= foot.Z)
+	m:SetAttribute("Turn", turn)
+	return m
+end
+
 local function makeProp(b: Box)
-	local look = LOOK[b.container or b.kind] or DEFAULT_LOOK
+	local kind = b.container or b.kind
+	local look = LOOK[kind] or DEFAULT_LOOK
+	local foot = look.size * S
+	-- the interact anchor: invisible, non-colliding (the web's containers block nothing), queryable for nobody
 	local p = Instance.new("Part")
-	p.Name = b.label ~= "" and b.label or (b.container or b.kind)
+	p.Name = b.label ~= "" and b.label or kind
 	p.Anchored = true
-	p.Size = look.size * S
-	p.Color = look.color
-	p.Material = Enum.Material.Plastic
-	p.MaterialVariant = "CanuckStuds"
-	p.CFrame = CFrame.new(b.x * S, look.size.Y * S / 2, b.z * S)
-	p.CollisionGroup = "M27"
-	p:SetAttribute("Cat", 27)
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Transparency = 1
+	p.Size = foot
+	p.CFrame = CFrame.new(b.x * S, foot.Y / 2, b.z * S)
 	p:SetAttribute("Box", b.id)
-	-- a dark lid band so the box reads at the top-down camera
-	local lid = Instance.new("Part")
-	lid.Anchored = true
-	lid.CanCollide = false
-	lid.CanQuery = false
-	lid.Size = Vector3.new(look.size.X * 1.04, 0.08, look.size.Z * 1.04) * S
-	lid.Color = Color3.fromHex("#16151D")
-	lid.CFrame = p.CFrame * CFrame.new(0, look.size.Y * S / 2 - 0.04 * S, 0)
-	lid.Parent = p
+	-- nudge the visual out of map props it would sit inside (source spots stand in stalls, on shelves, under desks)
+	local map = Workspace:FindFirstChild("GroundZero")
+	local props = map and map:FindFirstChild("Props")
+	local center = p.CFrame
+	if props then
+		mapParams.FilterDescendantsInstances = { props }
+		local probe = foot * 0.9
+		for step = 0, 10 do
+			local hits = Workspace:GetPartBoundsInBox(center, probe, mapParams)
+			local push = Vector3.zero
+			for _, h in hits do
+				if h.Transparency < 1 and h.Position.Y - h.Size.Y / 2 < foot.Y then
+					local d = center.Position - h.Position
+					push += Vector3.new(d.X, 0, d.Z)
+				end
+			end
+			if push.Magnitude < 1e-3 then
+				break
+			end
+			if step == 10 then
+				center = p.CFrame -- could not clear it: stay at the source spot
+				break
+			end
+			center = center + push.Unit * 0.1 * S
+		end
+	end
+	local model = fitted("C_" .. kind, foot)
+	if model then
+		local yaw = if model:GetAttribute("Turn") then math.pi / 2 else 0
+		-- 0.02-stud lift: the model's base never shares a plane with the ground (no z-fighting)
+		model:PivotTo(CFrame.new(center.X, 0.02, center.Z) * CFrame.Angles(0, yaw, 0))
+		model.Name = "Look"
+		model.Parent = p
+	else
+		local blk = Instance.new("Part")
+		blk.Name = "Look"
+		blk.Anchored = true
+		blk.CanCollide = false
+		blk.CanQuery = false
+		blk.Size = foot
+		blk.Color = look.color
+		blk.Material = Enum.Material.Plastic
+		blk.CFrame = CFrame.new(center.X, foot.Y / 2 + 0.02, center.Z)
+		blk.Parent = p
+	end
 	p.Parent = folder
 	b.part = p
 end
 
 local function publish(b: Box)
 	Workspace:SetAttribute("Box_" .. b.id, b.rolled and #b.items or -1)
+	local searched = b.rolled
+	for _, it in b.items do
+		if not it.revealed then
+			searched = false
+		end
+	end
+	Workspace:SetAttribute("BoxS_" .. b.id, searched)
 end
 
 local function view(b: Box): { any }
@@ -171,7 +249,11 @@ local function sendBox(p: Player, b: Box)
 	local r = Raid.raids[p]
 	local t = b.container and Items.types[b.container]
 	local name = if b.label ~= "" then b.label elseif t and t.name then t.name else (b.container or b.kind)
-	Net.event("LootOpen"):FireClient(p, b.id, name, view(b), r and Loot.bagView(r.bag) or {})
+	if b.kind == "corpse" or b.kind == "body" then
+		name = b.label
+	end
+	local row = (b.table and Items.tables[b.table]) or (b.container and Items.types[b.container])
+	Net.event("LootOpen"):FireClient(p, b.id, name, view(b), r and Loot.bagView(r.bag) or {}, (row and row.slots) or math.max(16, #b.items))
 end
 
 function Loot.bagView(bag: { any }): { any }
@@ -183,11 +265,19 @@ function Loot.bagView(bag: { any }): { any }
 	return out
 end
 
-function Loot.addBox(kind: string, x: number, z: number, label: string, items: { Item }?, data: any): Box
-	local id = "c" .. tostring(#folder:GetChildren() + 1) .. "_" .. tostring(math.random(1e6))
-	local b: Box = { id = id, kind = kind, x = x, z = z, r = Config.Loot.interactRadius, label = label, hold = 0, table = nil, container = kind, rolled = items ~= nil, items = items or {}, part = nil, data = data }
+function Loot.addBox(kind: string, x: number, z: number, label: string, items: { Item }?, data: any, model: Model?): Box
+	local id = "c" .. tostring(math.random(1e9))
+	local b: Box = { id = id, kind = kind, x = x, z = z, r = 1.9, label = label, hold = 0, table = nil, container = kind, rolled = items ~= nil, items = items or {}, part = nil, data = data }
 	boxes[id] = b
-	makeProp(b)
+	local root = model and model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		-- the fallen body itself is the container (World.dropBody: no mesh of its own)
+		root:SetAttribute("Box", id)
+		root:SetAttribute("BoxName", label)
+		b.part = root
+	else
+		makeProp(b)
+	end
 	publish(b)
 	return b
 end
@@ -222,7 +312,7 @@ local function interact(p: Player, id: any)
 		p:SetAttribute("HoldStart", Workspace:GetServerTimeNow())
 		return
 	end
-	if b.kind == "container" or b.kind == "corpse" then
+	if b.kind == "container" or b.kind == "corpse" or b.kind == "body" then
 		openBox(p, b)
 	else
 		Loot.finish(p, b)
@@ -300,7 +390,9 @@ local function build(p: Player, b: Box)
 end
 
 function Loot.finish(p: Player, b: Box)
-	if b.kind == "door" then
+	if b.kind == "container" then
+		openBox(p, b) -- a held open (tech boxes, LOOTBOX_OPEN 0.6 s)
+	elseif b.kind == "door" then
 		doorToggle(p, b)
 	elseif b.kind == "construct" then
 		build(p, b)
@@ -332,13 +424,15 @@ local function take(p: Player, boxId: any, index: any)
 		return
 	end
 	table.remove(o.box.items, index)
+	if #o.box.items == 0 and o.box.data and o.box.data.beacon then
+		o.box.data.beacon:Destroy()
+	end
 	local def = Items.items[it.id]
 	if def and def.fire and not r.gun then
 		r.gun = { id = it.id, ammo = it.ammo or 0, dur = 100 }
 	else
 		Raid.addItem(r.bag, it.id, it.n)
 	end
-	Net.event("Toast"):FireClient(p, string.format("+%d %s", it.n, def and def.name or it.id), if def and (def.q or 0) >= 4 then "rare" else "good")
 	publish(o.box)
 	require(script.Parent.Weapons).syncAmmo(p)
 	sendBox(p, o.box)
@@ -362,6 +456,7 @@ local function step(dt: number)
 				if o.searchT >= Config.Loot.inspect[q + 1] then
 					o.searchT = 0
 					it.revealed = true
+					publish(o.box)
 					sendBox(p, o.box)
 				end
 				break
@@ -391,7 +486,7 @@ function Loot.start()
 	for _, it in MapData.interacts do
 		if it.kind == "container" then
 			if math.random() <= (it.chance or 1) then
-				local b: Box = { id = it.id, kind = "container", x = it.x, z = it.z, r = it.r or Config.Loot.interactRadius, label = "", hold = 0, table = it.table, container = it.container, rolled = false, items = {}, part = nil, data = nil }
+				local b: Box = { id = it.id, kind = "container", x = it.x, z = it.z, r = 1.9, label = "", hold = if it.container == "tech" then 0.6 else 0, table = it.table, container = it.container, rolled = false, items = {}, part = nil, data = nil }
 				boxes[b.id] = b
 				makeProp(b)
 				publish(b)
@@ -512,19 +607,38 @@ function Loot.start()
 		end
 	end
 	print(string.format("[Canuckov] %d containers this raid", n))
-	Raid.onCorpse(function(pos, name, items)
+	-- the dead player's body: "Lost Items", everything pre-revealed (the tomb), a cyan beacon over it
+	Raid.onCorpse(function(pos, name, items, model)
 		local list = {}
-		for _, s in items do
-			table.insert(list, { id = s.id, n = s.n, revealed = false })
+		for _, st in items do
+			table.insert(list, { id = st.id, n = st.n, revealed = true })
 		end
-		Loot.addBox("corpse", pos.X, pos.Z, name .. "'s Remains", list)
+		local b = Loot.addBox("corpse", pos.X, pos.Z, "Lost Items", list, nil, model)
+		local beacon = Instance.new("Part")
+		beacon.Name = "Beacon"
+		beacon.Anchored = true
+		beacon.CanCollide = false
+		beacon.CanQuery = false
+		beacon.CastShadow = false
+		beacon.Material = Enum.Material.Neon
+		beacon.Color = Color3.fromHex("#7fd0ff")
+		beacon.Transparency = 0.3
+		beacon.Size = Vector3.new(0.12, 2.4, 0.12) * S
+		beacon.CFrame = CFrame.new(pos.X * S, 1.2 * S, pos.Z * S)
+		beacon.Parent = if model then model else folder
+		b.data = { beacon = beacon }
 	end)
-	Enemies.onCorpse(function(pos, name, kind)
+	-- enemy bodies: "Body", the carried loot unrevealed (the gun with what is left in its magazine + the body table)
+	Enemies.onCorpse(function(pos, name, kind, model, gun)
 		local body = Items.bodies[kind]
 		local list: { Item } = {}
+		if gun and Items.items[gun] then
+			local cap = (Items.gunFeel[gun] or {}).Capacity or 8
+			table.insert(list, { id = gun, n = 1, revealed = false, ammo = math.random(0, cap) })
+		end
 		if body then
 			for _, d in body.drops do
-				if math.random() < (d.chance or 1) then
+				if not d.weapon and math.random() < (d.chance or 1) then
 					local c = d.count or { 1, 1 }
 					for _ = 1, math.random(c[1], c[2]) do
 						local id = pick(d.pool or {})
@@ -535,7 +649,9 @@ function Loot.start()
 				end
 			end
 		end
-		Loot.addBox("corpse", pos.X, pos.Z, name, list)
+		if #list > 0 then
+			Loot.addBox("body", pos.X, pos.Z, "Body", list, nil, model)
+		end
 	end)
 	Net.event("Interact").OnServerEvent:Connect(interact)
 	Net.event("InteractCancel").OnServerEvent:Connect(function(p)

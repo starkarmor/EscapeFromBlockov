@@ -25,11 +25,12 @@ export type Target = {
 	height: number,
 	hurt: (dmg: number, info: any) -> boolean, -- returns true on a kill
 	ref: any,
+	model: Model?,
 }
 -- registered by Raid (players) and Enemies
 Weapons.targets = {} :: { [any]: Target }
 
-export type Bullet = { pen: number?, armorBreak: number?, fromName: string?, bleed: number?, pos: Vector3, dir: Vector3, speed: number, left: number, half: number, travelled: number, team: number, damage: number, dmgOver: number, crit: boolean, critMul: number, from: Player?, fromRef: any }
+export type Bullet = { weaponId: string?, pen: number?, armorBreak: number?, fromName: string?, bleed: number?, pos: Vector3, dir: Vector3, speed: number, left: number, half: number, travelled: number, team: number, damage: number, dmgOver: number, crit: boolean, critMul: number, from: Player?, fromRef: any }
 local bullets: { Bullet } = {}
 
 local params = RaycastParams.new()
@@ -45,6 +46,7 @@ Weapons.takeAmmo = nil :: ((Player, string, number) -> number)? -- Raid: remove 
 Weapons.countAmmo = nil :: ((Player, string) -> number)?
 Weapons.isDodging = nil :: ((Player) -> boolean)?
 Weapons.onBag = nil :: ((Player) -> ())?
+Weapons.busy = nil :: ((Player) -> boolean)?
 
 local function syncAmmo(p: Player)
 	local g = Weapons.getGun and Weapons.getGun(p)
@@ -54,6 +56,7 @@ local function syncAmmo(p: Player)
 	if g then
 		p:SetAttribute("Gun", g.id)
 		p:SetAttribute("Mag", g.ammo)
+		p:SetAttribute("GunDur", g.dur or 100)
 		local ammoId = Guns.ammoOf(g.id)
 		p:SetAttribute("Reserve", if ammoId and Weapons.countAmmo then Weapons.countAmmo(p, ammoId) else 0)
 	else
@@ -94,7 +97,15 @@ local function onFire(p: Player, muzzle: any, yaws: any, slope: any, head: any)
 	if now - st.lastShot < gap * 0.8 then
 		return
 	end
-	if g.ammo <= 0 or (g.dur or 1) <= 0 then
+	if (g.dur or 1) <= 0 then
+		-- durability 0: "Gun broken!" re-shows at most every 2 s while the trigger is pressed (World.fireGun)
+		if now - ((st :: any).brokenToast or -math.huge) > 2 then
+			(st :: any).brokenToast = now
+			Net.event("Toast"):FireClient(p, "Gun broken!", "bad")
+		end
+		return
+	end
+	if g.ammo <= 0 then
 		return
 	end
 	local rp = root.Position / S
@@ -154,6 +165,8 @@ local function onFire(p: Player, muzzle: any, yaws: any, slope: any, head: any)
 			armorBreak = ammo and ammo.armorBreak or 0.55,
 			from = p,
 			fromRef = p,
+			weaponId = g.id,
+			fromName = p.DisplayName,
 		})
 	end
 	-- everyone else draws the tracers
@@ -181,9 +194,15 @@ local function onReload(p: Player)
 	if st.reloadAt or not row or g.ammo >= row.Capacity then
 		return
 	end
+	if Weapons.busy and Weapons.busy(p) then
+		return -- an item use / interaction runs (Player.startReload 'busy')
+	end
 	local ammoId = Guns.ammoOf(g.id)
 	if not ammoId or not Weapons.countAmmo or Weapons.countAmmo(p, ammoId) <= 0 then
-		Net.event("Toast"):FireClient(p, "No ammo", "bad")
+		-- 'noammo' is the only refusal with feedback (World: toast "Out of ammo")
+		if g.ammo <= 0 then
+			Net.event("Toast"):FireClient(p, "Out of ammo", "bad")
+		end
 		return
 	end
 	local now = os.clock()
@@ -199,6 +218,28 @@ function Weapons.cancelReload(p: Player)
 	if st and st.reloadAt then
 		st.reloadAt = nil
 		p:SetAttribute("ReloadUntil", nil)
+	end
+end
+
+--- everyone sees blood, flashes and decals; the shooter and the victim also get the damage number / hit marker
+function Weapons.broadcastHit(t: Target, at: Vector3, dmg: number, crit: boolean, killed: boolean, from: Player?, bullet: boolean)
+	local victim = if t.kind == "player" then t.ref else nil
+	for _, pl in Players:GetPlayers() do
+		Net.event("Fx"):FireClient(pl, "hit", {
+			model = t.model,
+			kind = t.kind,
+			at = at,
+			dmg = dmg,
+			crit = crit,
+			kill = killed,
+			byPlayer = from ~= nil,
+			mine = pl == from,
+			me = pl == victim,
+			bullet = bullet,
+		})
+	end
+	if from and from.Parent and t.kind ~= "player" then
+		Net.event("Hit"):FireClient(from, killed, crit, at, dmg)
 	end
 end
 
@@ -248,10 +289,8 @@ local function step(dt: number)
 			local at = a + (e - a) * u
 			local travelled = b.travelled + stepLen * u
 			local dmg = b.damage * (if travelled > b.half then b.dmgOver else 1) * (if b.crit then b.critMul else 1)
-			local killed = t.hurt(dmg, { pen = b.pen or 0, armorBreak = b.armorBreak or 0.55, from = b.from, fromRef = b.fromRef, fromName = b.fromName, bleed = b.bleed, crit = b.crit, dir = b.dir, at = at })
-			if b.from and b.from.Parent then
-				Net.event("Hit"):FireClient(b.from, killed, b.crit, at + Vector3.new(0, 1, 0), dmg)
-			end
+			local killed = t.hurt(dmg, { weaponId = b.weaponId, pen = b.pen or 0, armorBreak = b.armorBreak or 0.55, from = b.from, fromRef = b.fromRef, fromName = b.fromName, bleed = b.bleed, crit = b.crit, dir = b.dir, at = at })
+			Weapons.broadcastHit(t, at, dmg, b.crit, killed, b.from, true)
 			table.remove(bullets, i)
 		elseif wall then
 			local at = wall.Position / S

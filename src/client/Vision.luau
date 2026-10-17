@@ -21,15 +21,29 @@ local params = RaycastParams.new()
 params.CollisionGroup = "QSight"
 params.FilterType = Enum.RaycastFilterType.Exclude
 
-type Tag = { gui: Frame, fill: Frame, root: BasePart, shown: boolean? }
+type Tag = { gui: Frame, fill: Frame, lag: Frame, blink: Frame, pop: UIScale, bubble: Frame, root: BasePart, shown: boolean?, hp: number, lagF: number, lagHold: number, blinkT: number, popT: number, alertT: number }
 local tags: { [Model]: Tag } = {}
--- screen-projected name + health plates (the web's DOM overlays), one ScreenGui for all
+-- WorldUI nameplates: name 20 over a 109x20 bar (dark .718; white lag; fill #FFE3C6, glow #FF4545); a hit blinks the bar
+-- #FF5D5D for 0.1 s and pops it to 1.5x (0.25 s), the lag trails 0.35 s; "!" bubble for 1.6 s on entering combat
 local plateGui = Instance.new("ScreenGui")
 plateGui.Name = "Nameplates"
 plateGui.IgnoreGuiInset = true
 plateGui.ResetOnSpawn = false
 plateGui.DisplayOrder = -1
 plateGui.Parent = player:WaitForChild("PlayerGui")
+local plateRoot = Instance.new("Frame")
+plateRoot.BackgroundTransparency = 1
+plateRoot.Size = UDim2.fromScale(1, 1)
+plateRoot.Parent = plateGui
+local plateScale = Instance.new("UIScale")
+plateScale.Parent = plateRoot
+local U = 0.5
+
+local function rounded(f: GuiObject)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(1, 0)
+	c.Parent = f
+end
 
 local function tagFor(m: Model): Tag?
 	local t = tags[m]
@@ -42,48 +56,82 @@ local function tagFor(m: Model): Tag?
 	end
 	local bb = Instance.new("Frame")
 	bb.BackgroundTransparency = 1
-	bb.AnchorPoint = Vector2.new(0.5, 1)
-	bb.Size = UDim2.fromOffset(120, 34)
+	bb.Size = UDim2.fromOffset(0, 0)
+	bb.Visible = false
 	local name = Instance.new("TextLabel")
 	name.BackgroundTransparency = 1
-	name.Size = UDim2.new(1, 0, 0, 16)
+	name.AnchorPoint = Vector2.new(0.5, 1)
+	name.Position = UDim2.fromOffset(0, -26)
+	name.AutomaticSize = Enum.AutomaticSize.X
+	name.Size = UDim2.fromOffset(0, 24)
 	name.FontFace = FONT
-	name.TextSize = 14
-	name.TextColor3 = Color3.fromRGB(255, 248, 233)
+	name.TextSize = 20
+	name.TextColor3 = Color3.fromRGB(255, 255, 255)
 	name.Text = m.Name
 	local st = Instance.new("UIStroke")
 	st.Thickness = 2
-	st.Color = Color3.fromRGB(22, 21, 29)
+	st.Color = Color3.new(0, 0, 0)
+	st.Transparency = 0.35
 	st.Parent = name
 	name.Parent = bb
 	local bar = Instance.new("Frame")
-	bar.Position = UDim2.new(0.5, -27, 0, 19)
-	bar.Size = UDim2.fromOffset(54, 8)
-	bar.BackgroundColor3 = Color3.fromRGB(40, 20, 24)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 4)
-	c.Parent = bar
-	local bs = Instance.new("UIStroke")
-	bs.Thickness = 2
-	bs.Color = Color3.fromRGB(22, 21, 29)
-	bs.Parent = bar
+	bar.AnchorPoint = Vector2.new(0.5, 1)
+	bar.Size = UDim2.fromOffset(109, 20)
+	bar.BackgroundColor3 = Color3.new(0, 0, 0)
+	bar.BackgroundTransparency = 0.282
+	bar.ClipsDescendants = true
+	rounded(bar)
+	local pop = Instance.new("UIScale")
+	pop.Parent = bar
+	local lag = Instance.new("Frame")
+	lag.Position = UDim2.fromOffset(6, 6)
+	lag.Size = UDim2.fromOffset(97, 8)
+	lag.BackgroundColor3 = Color3.new(1, 1, 1)
+	rounded(lag)
+	lag.Parent = bar
 	local fill = Instance.new("Frame")
-	fill.Size = UDim2.fromScale(1, 1)
-	fill.BackgroundColor3 = Color3.fromRGB(243, 69, 67)
-	local c2 = c:Clone()
-	c2.Parent = fill
+	fill.Position = UDim2.fromOffset(6, 6)
+	fill.Size = UDim2.fromOffset(97, 8)
+	fill.BackgroundColor3 = Color3.fromHex("#ffe3c6")
+	rounded(fill)
+	local gl = Instance.new("UIStroke")
+	gl.Thickness = 1.5
+	gl.Color = Color3.fromHex("#ff4545")
+	gl.Parent = fill
 	fill.Parent = bar
+	local blink = Instance.new("Frame")
+	blink.Size = UDim2.fromScale(1, 1)
+	blink.BackgroundColor3 = Color3.fromHex("#ff5d5d")
+	blink.BackgroundTransparency = 1
+	rounded(blink)
+	blink.Parent = bar
 	bar.Parent = bb
-	bb.Visible = false
-	bb.Parent = plateGui
-	t = { gui = bb, fill = fill, root = root }
+	local bubble = Instance.new("TextLabel")
+	bubble.AnchorPoint = Vector2.new(0.5, 1)
+	bubble.Position = UDim2.fromOffset(0, -56)
+	bubble.Size = UDim2.fromOffset(34, 38)
+	bubble.BackgroundColor3 = Color3.new(1, 1, 1)
+	bubble.FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Heavy)
+	bubble.Text = "!"
+	bubble.TextSize = 26
+	bubble.TextColor3 = Color3.fromHex("#1e272e")
+	bubble.Visible = false
+	local bc = Instance.new("UICorner")
+	bc.CornerRadius = UDim.new(0, 17)
+	bc.Parent = bubble
+	bubble.Parent = bb
+	bb.Parent = plateRoot
+	t = { gui = bb, fill = fill, lag = lag, blink = blink, pop = pop, bubble = bubble :: any, root = root, hp = 1, lagF = 1, lagHold = 0, blinkT = 99, popT = 99, alertT = 99 }
+	tags[m] = t
 	m:GetAttributeChangedSignal("AlertAt"):Connect(function()
-		local kind = m:GetAttribute("Kind")
-		if kind ~= "wolf" then
+		local tt = tags[m]
+		if tt then
+			tt.alertT = 0
+		end
+		if m:GetAttribute("Kind") ~= "wolf" then
 			require(script.Parent.Sfx).at("honk", root.Position / S, 35)
 		end
 	end)
-	tags[m] = t
 	return t
 end
 
@@ -101,7 +149,7 @@ local function setVisible(m: Model, on: boolean)
 		if show then
 			local sp, inView = Workspace.CurrentCamera:WorldToViewportPoint(t.root.Position + Vector3.new(0, 1.35 * S, 0))
 			show = inView
-			t.gui.Position = UDim2.fromOffset(sp.X, sp.Y)
+			t.gui.Position = UDim2.fromOffset(sp.X / U, sp.Y / U)
 		end
 		t.gui.Visible = show
 	end
@@ -116,7 +164,30 @@ local function night(): boolean
 	return h >= 22 or h < 6
 end
 
+local lastT = os.clock()
 function Vision.update()
+	local nowC = os.clock()
+	local dt = math.min(0.1, nowC - lastT)
+	lastT = nowC
+	local vpS = Workspace.CurrentCamera.ViewportSize
+	U = math.min(vpS.X / 2560, vpS.Y / 1440)
+	plateScale.Scale = U
+	plateRoot.Size = UDim2.fromOffset(vpS.X / U, vpS.Y / U)
+	for _, t in tags do
+		t.blinkT += dt
+		t.popT += dt
+		t.alertT += dt
+		if t.lagHold > 0 then
+			t.lagHold -= dt
+		else
+			t.lagF = math.max(t.hp, t.lagF - 1.5 * dt)
+		end
+		t.lagF = math.max(t.lagF, t.hp)
+		t.lag.Size = UDim2.fromOffset(97 * t.lagF, 8)
+		t.blink.BackgroundTransparency = if t.blinkT < 0.1 then t.blinkT / 0.1 else 1
+		t.pop.Scale = if t.popT < 0.25 then 1 + 0.5 * (1 - t.popT / 0.25) else 1
+		t.bubble.Visible = t.alertT < 1.6
+	end
 	local folder = Workspace:FindFirstChild("Characters")
 	if not folder then
 		return
@@ -159,7 +230,13 @@ function Vision.update()
 		if t then
 			local hp, max = m:GetAttribute("HP"), m:GetAttribute("MaxHP")
 			if typeof(hp) == "number" and typeof(max) == "number" then
-				t.fill.Size = UDim2.fromScale(math.clamp(hp / max, 0, 1), 1)
+				local f = math.clamp(hp / max, 0, 1)
+				if f < t.hp - 1e-4 then
+					t.blinkT, t.popT, t.lagHold = 0, 0, 0.35
+				end
+				t.hp = f
+				t.fill.Size = UDim2.fromOffset(97 * f, 8)
+				t.fill.BackgroundColor3 = Color3.fromRGB(255, 132, 119):Lerp(Color3.fromRGB(255, 227, 198), f)
 			end
 		end
 	end
@@ -172,95 +249,76 @@ function Vision.update()
 end
 
 -- ------------------------------------------------------------------ vision fan (VisionFan.ts: the ground outside the
--- view cone darkens). A disc of triangle sectors around the beaver; sectors inside the cone are clear.
-local FAN_N = 72
-local FAN_R = 40 -- metres (beyond the visible screen at the 45 m arm)
-local fanModel: Model? = nil
-local sectors: { { a: WedgePart, b: WedgePart, ang: number } } = {}
-
-local function triangle(w1: WedgePart, w2: WedgePart, a: Vector3, b: Vector3, c: Vector3)
-	-- the standard two-wedge triangle (a, b, c in studs)
-	local ab, ac, bc = b - a, c - a, c - b
-	local abd, acd, bcd = ab:Dot(ab), ac:Dot(ac), bc:Dot(bc)
-	if abd > acd and abd > bcd then
-		c, a = a, c
-	elseif acd > bcd and acd > abd then
-		a, b = b, a
-	end
-	ab, ac, bc = b - a, c - a, c - b
-	local right = ac:Cross(ab).Unit
-	local up = bc:Cross(right).Unit
-	local back = bc.Unit
-	local height = math.abs(ab:Dot(up))
-	w1.Size = Vector3.new(0.05, height, math.abs(ab:Dot(back)))
-	w1.CFrame = CFrame.fromMatrix((a + b) / 2, right, up, back)
-	w2.Size = Vector3.new(0.05, height, math.abs(ac:Dot(back)))
-	w2.CFrame = CFrame.fromMatrix((a + c) / 2, -right, up, -back)
-end
+-- view cone dims). One flat part under the beaver carries a SurfaceGui disc; the dark sector outside the cone is cut
+-- from two clipped halves with stepped gradients (exact sector, no triangle seams), turned to the facing.
+local FAN_R = 40 -- metres
+local fanPart: Part? = nil
+local fanHalves: { UIGradient } = {}
 
 local function buildFan()
-	local m = Instance.new("Model")
-	m.Name = "VisionFan"
-	local function wedge(): WedgePart
-		local w = Instance.new("WedgePart")
-		w.Anchored = true
-		w.CanCollide = false
-		w.CanQuery = false
-		w.CanTouch = false
-		w.CastShadow = false
-		w.Material = Enum.Material.SmoothPlastic
-		w.Color = Color3.fromRGB(16, 18, 40)
-		w.Transparency = 0.5
-		w.Parent = m
-		return w
+	local part = Instance.new("Part")
+	part.Name = "VisionFan"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.new(FAN_R * 2 * S, 0.05, FAN_R * 2 * S)
+	local sg = Instance.new("SurfaceGui")
+	sg.Face = Enum.NormalId.Top
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	sg.CanvasSize = Vector2.new(1024, 1024)
+	sg.LightInfluence = 0
+	sg.AlwaysOnTop = false
+	sg.Parent = part
+	for i = 1, 2 do
+		local right = i == 1
+		local clip = Instance.new("Frame")
+		clip.BackgroundTransparency = 1
+		clip.ClipsDescendants = true
+		clip.Size = UDim2.fromOffset(512, 1024)
+		clip.Position = UDim2.fromOffset(if right then 512 else 0, 0)
+		clip.Parent = sg
+		local disc = Instance.new("Frame")
+		disc.BorderSizePixel = 0
+		disc.BackgroundColor3 = Color3.fromRGB(16, 18, 40)
+		disc.BackgroundTransparency = 0.5
+		disc.Size = UDim2.fromOffset(1024, 1024)
+		disc.Position = UDim2.fromOffset(if right then -512 else 0, 0)
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(1, 0)
+		c.Parent = disc
+		local g = Instance.new("UIGradient")
+		g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.499, 0), NumberSequenceKeypoint.new(0.5, 1), NumberSequenceKeypoint.new(1, 1) })
+		g.Parent = disc
+		disc.Parent = clip
+		fanHalves[i] = g
 	end
-	local y = 0.06 * S
-	for i = 1, FAN_N do
-		local a0 = (i - 1) / FAN_N * math.pi * 2
-		local a1 = i / FAN_N * math.pi * 2
-		local w1, w2 = wedge(), wedge()
-		local c = Vector3.new(0, y, 0)
-		local p0 = Vector3.new(math.sin(a0) * FAN_R * S, y, math.cos(a0) * FAN_R * S)
-		local p1 = Vector3.new(math.sin(a1) * FAN_R * S, y, math.cos(a1) * FAN_R * S)
-		triangle(w1, w2, c, p0, p1)
-		table.insert(sectors, { a = w1, b = w2, ang = (a0 + a1) / 2 })
-	end
-	local pivot = Instance.new("Part")
-	pivot.Name = "Pivot"
-	pivot.Anchored = true
-	pivot.CanCollide = false
-	pivot.CanQuery = false
-	pivot.Transparency = 1
-	pivot.Size = Vector3.one * 0.1
-	pivot.CFrame = CFrame.new()
-	pivot.Parent = m
-	m.PrimaryPart = pivot
-	m.Parent = Workspace:FindFirstChild("LocalFx") or Workspace
-	fanModel = m
+	part.Parent = Workspace:FindFirstChild("LocalFx") or Workspace
+	fanPart = part
 end
 
 function Vision.fan(alive: boolean)
-	if not fanModel then
+	if not fanPart then
 		buildFan()
 	end
-	local m = fanModel :: Model
+	local part = fanPart :: Part
 	if not alive then
-		m.Parent = nil
+		part.Parent = nil
 		return
 	end
-	m.Parent = Workspace:FindFirstChild("LocalFx") or Workspace
+	part.Parent = Workspace:FindFirstChild("LocalFx") or Workspace
 	local V = Config.View
 	local nm = if night() then V.nightMul else { 1, 1, 1 }
-	local half = math.rad(V.angle * nm[1] / 2)
-	m:PivotTo(CFrame.new(PC.pos.X * S, 0, PC.pos.Y * S))
-	for _, sc in sectors do
-		local off = math.abs(math.atan2(math.sin(sc.ang - PC.facing), math.cos(sc.ang - PC.facing)))
-		local t = if off <= half then 1 else 0.5
-		if sc.a.Transparency ~= t then
-			sc.a.Transparency = t
-			sc.b.Transparency = t
-		end
-	end
+	local cone = V.angle * nm[1]
+	-- dark fraction clockwise from the gui top, starting at the cone's clockwise edge
+	local p = (360 - cone) / 360
+	fanHalves[1].Rotation = math.min(p, 0.5) * 360
+	fanHalves[2].Rotation = 180 + math.max(0, p - 0.5) * 360
+	-- measured in Studio: this turn puts the lit sector on the facing (checked with the cursor right and up-left)
+	local yaw = PC.facing
+	part.CFrame = CFrame.new(PC.pos.X * S, 0.08 * S, PC.pos.Y * S) * CFrame.Angles(0, yaw + math.pi / 2 - math.rad(cone / 2), 0)
 end
 
 --- the enemy head under a viewport point, if any (ray vs each visible enemy's Head part box)

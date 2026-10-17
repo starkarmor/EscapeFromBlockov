@@ -61,7 +61,15 @@ function RigBuilder.build(key: string, name: string?): Model
 		part.Name = if p.weapon then "Weapon" elseif p.head then "Head" else ("P" .. i)
 		part.Size = Vector3.new(p.size[1], p.size[2], p.size[3]) * (k * S)
 		part.Color = hex(p.c)
-		part.Material = Enum.Material.SmoothPlastic
+		-- the shared world stud pitch on the big body blocks (art brief: studs repeat across floors and animals);
+		-- eyes, beaks, teeth and other small identity pieces stay smooth
+		local sz = part.Size
+		if math.min(sz.X, sz.Y, sz.Z) >= 0.6 and math.max(sz.X, sz.Y, sz.Z) >= 1.2 and not p.weapon then
+			part.Material = Enum.Material.Plastic
+			part.MaterialVariant = "CanuckStuds"
+		else
+			part.Material = Enum.Material.SmoothPlastic
+		end
 		part.Transparency = if p.o then 1 - p.o else 0
 		part.Massless = true
 		part.CanCollide = false

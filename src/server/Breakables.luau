@@ -21,7 +21,12 @@ function Breakables.explode(at: Vector3, radius: number, damage: number, info: a
 	for key, t in Weapons.targets do
 		local tp = t.pos()
 		if tp and (Vector2.new(tp.X, tp.Z) - Vector2.new(at.X, at.Z)).Magnitude <= radius + t.radius * 0.5 then
-			task.spawn(t.hurt, damage, { pen = info.ap or 1, armorBreak = info.armorBreak or 1, explosion = true, fromName = "Explosion", from = info.from })
+			task.spawn(function()
+				local killed = t.hurt(damage, { pen = info.ap or 1, armorBreak = info.armorBreak or 1, explosion = true, fromName = "Explosion", from = info.from, self = false })
+				if t.kind ~= "breakable" then
+					Weapons.broadcastHit(t, Vector3.new(tp.X, 0.7, tp.Z), damage, false, killed, info.from, false)
+				end
+			end)
 		end
 	end
 end

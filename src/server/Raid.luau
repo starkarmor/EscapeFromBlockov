@@ -26,6 +26,7 @@ export type Stack = { id: string, n: number }
 export type Profile = {
 	stash: { Stack },
 	money: number,
+	xp: number?,
 	raids: number,
 	extracts: number,
 	deaths: number,
@@ -176,6 +177,9 @@ local function syncVitals(p: Player)
 		w += (def and def.weight or 0) * s.n
 	end
 	p:SetAttribute("Load", w / Config.Weight.carry)
+	local xa = r :: any
+	p:SetAttribute("ArmorDur", xa.armor and xa.armor.dur or nil)
+	p:SetAttribute("HelmetDur", xa.helmet and xa.helmet.dur or nil)
 	p:SetAttribute("Weight", w)
 	p:SetAttribute("InRaid", r.inRaid)
 end
@@ -219,8 +223,8 @@ local function spawnSpot(i: number): Vector2
 	return Vector2.new(e.x + math.cos(a) * r, e.z + math.sin(a) * r)
 end
 
-local corpseHook: ((Vector3, string, { Stack }) -> ())? = nil
-function Raid.onCorpse(fn: (Vector3, string, { Stack }) -> ())
+local corpseHook: ((Vector3, string, { Stack }, Model?) -> ())? = nil
+function Raid.onCorpse(fn: (Vector3, string, { Stack }, Model?) -> ())
 	corpseHook = fn
 end
 
@@ -246,6 +250,7 @@ function Raid.deploy(p: Player)
 	}
 	raids[p] = r
 	prof.raids += 1
+	(r :: any).xpAtStart = prof.xp or 0
 	local n = 0
 	for _, other in Players:GetPlayers() do
 		if other ~= p and raids[other] and raids[other].alive then
@@ -294,6 +299,7 @@ function Raid.deploy(p: Player)
 			return Raid.hurt(p, dmg, info)
 		end,
 		ref = p,
+		model = model,
 	}
 	(r :: any).held = "gun"
 	syncVitals(p)
@@ -315,6 +321,10 @@ function Raid.hurt(p: Player, dmg: number, info: any): boolean
 	if os.clock() - r.dodgeAt < Config.Dash.time and not (info and info.direct) then
 		return false
 	end
+	-- KillInfo for the result screen's "I was killed by" (Killer.ts): name, weapon, headshot, explosion
+	if info then
+		(r :: any).lastKill = { name = info.fromName, weaponId = info.weaponId, crit = info.crit, explosion = info.explosion, self = info.from == p }
+	end
 	-- armorMultiplier (Player.ts): dmg x 2 / (clamp(armor - pen, 0, 999) + 2); a crit hits the helmet, else the body armor
 	local x = r :: any
 	local worn = if info and info.crit then x.helmet else x.armor
@@ -334,6 +344,49 @@ function Raid.hurt(p: Player, dmg: number, info: any): boolean
 	return false
 end
 
+-- data.ts LEVEL_EXP / levelForXp (cumulative; Lv2 at 2000, then +1000 per level step)
+local LEVEL_EXP = { 0, 0, 2000, 5000, 9000, 14000, 20000, 27000, 35000, 44000, 54000, 65000, 77000, 90000, 104000, 119000, 135000, 152000, 170000, 189000, 209000, 230000, 252000, 275000, 299000, 324000, 350000, 377000, 405000, 434000, 464000 }
+function Raid.levelForXp(xp: number): (number, number, number)
+	local level = 1
+	while level + 1 < #LEVEL_EXP and xp >= LEVEL_EXP[level + 2] do
+		level += 1
+	end
+	local next = LEVEL_EXP[level + 2] or (LEVEL_EXP[level + 1] + 1000 * (level + 1))
+	return level, xp - LEVEL_EXP[level + 1], next - LEVEL_EXP[level + 1]
+end
+
+function Raid.addXp(p: Player, n: number)
+	local prof = profiles[p]
+	if prof and n > 0 then
+		prof.xp = (prof.xp or 0) + n
+	end
+end
+
+-- Killer.ts killerText: "Name (Weapon)" + " Headshot"; "Myself"; "Explosion"; "?" for hunger / thirst / bleeding
+local function killerText(k: any): string
+	if not k then
+		return "?"
+	end
+	local name = if k.self then "Myself" else (k.name or "")
+	if name == "Starvation" or name == "Bleeding" then
+		return "?"
+	end
+	local weapon = ""
+	if k.explosion then
+		weapon = "Explosion"
+	elseif k.weaponId and Guns.items[k.weaponId] then
+		weapon = Guns.items[k.weaponId].name
+	elseif k.weaponId == "butcher_knife" then
+		weapon = "Butcher Knife"
+	elseif k.weaponId == "animal_weapon" then
+		weapon = "Bare Hands"
+	end
+	if name ~= "" and weapon ~= "" then
+		return string.format("%s (%s)%s", name, weapon, if k.crit then " Headshot" else "")
+	end
+	return if name ~= "" then name elseif weapon ~= "" then weapon else "?"
+end
+
 function Raid.die(p: Player, info: any)
 	local r = raids[p]
 	if not r or not r.alive then
@@ -342,11 +395,12 @@ function Raid.die(p: Player, info: any)
 	r.alive = false
 	r.inRaid = false
 	local prof = profiles[p]
+	local xpBefore = prof and prof.xp or 0
 	if prof then
 		prof.deaths += 1
 	end
 	local pos = Raid.posOf(p)
-	-- everything carried goes to the corpse (one recovery attempt)
+	-- splitOnDeath (deathKeep.ts): everything goes to the body except the kept melee slot
 	local loot: { Stack } = {}
 	if r.gun then
 		table.insert(loot, { id = r.gun.id, n = 1 })
@@ -363,19 +417,40 @@ function Raid.die(p: Player, info: any)
 	for _, s in r.bag do
 		table.insert(loot, { id = s.id, n = s.n })
 	end
-	if pos and corpseHook then
-		corpseHook(pos, p.DisplayName, loot)
-	end
 	Weapons.targets[p] = nil
 	Weapons.cancelReload(p)
 	syncVitals(p)
-	if p.Character then
-		p.Character:Destroy()
-		p.Character = nil
+	-- World.update: the beaver falls on its back (0.333 s, clients animate from DeadAt) and stays; its body holds
+	-- the gear ("Lost Items", pre-revealed, cyan beacon) for one recovery
+	local char = p.Character
+	if char then
+		local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root then
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.Anchored = true
+			local tag = root:FindFirstChildOfClass("BillboardGui")
+			if tag then
+				tag:Destroy()
+			end
+		end
+		char:SetAttribute("Dead", true)
+		char:SetAttribute("DeadAt", Workspace:GetServerTimeNow())
+		char.Name = p.DisplayName .. " (dead)"
 	end
-	local by = info and info.fromName or "?"
-	Net.event("Died"):FireClient(p, by, os.clock() - r.startedAt)
+	if pos and corpseHook then
+		corpseHook(pos, p.DisplayName, loot, char)
+	end
+	local kt = killerText(x.lastKill)
+	local secs = os.clock() - r.startedAt
 	saveProfile(p)
+	-- World.dead 1.5 s after the death, then resolveDeath -> the result screen
+	task.delay(1.5, function()
+		if p.Parent and p.Character == char then
+			p.Character = nil
+		end
+		local lv, into, need = Raid.levelForXp(xpBefore)
+		Net.event("Died"):FireClient(p, { killer = kt, secs = secs, xpBefore = xpBefore, xpAfter = prof and prof.xp or xpBefore, level = lv, into = into, need = need })
+	end)
 end
 
 function Raid.extract(p: Player)
@@ -411,7 +486,9 @@ function Raid.extract(p: Player)
 		p.Character:Destroy()
 		p.Character = nil
 	end
-	Net.event("Extracted"):FireClient(p, banked, os.clock() - r.startedAt)
+	local xpNow = prof and prof.xp or 0
+	local lv, into, need = Raid.levelForXp(xpNow)
+	Net.event("Extracted"):FireClient(p, banked, { secs = os.clock() - r.startedAt, xpBefore = (r :: any).xpAtStart or 0, xpAfter = xpNow, level = lv, into = into, need = need })
 	saveProfile(p)
 end
 
@@ -522,6 +599,9 @@ function Raid.start()
 		return k
 	end
 	Weapons.onBag = Raid.sendBag
+	Weapons.busy = function(p)
+		return p:GetAttribute("UseId") ~= nil or p:GetAttribute("HoldId") ~= nil
+	end
 	Weapons.isDodging = function(p)
 		local r = raids[p]
 		return r ~= nil and os.clock() - r.dodgeAt < Config.Dash.time
