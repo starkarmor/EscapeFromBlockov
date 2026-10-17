@@ -1,0 +1,14 @@
+{
+  "note": "Creator Store assets used in the game. Imported into ReplicatedStorage/CreatorAssets by tools/import_assets.py (Studio MCP insert_asset), scripts stripped, normalised. Rojo does not manage that folder; re-run the tool on a fresh place. Rights: free listings, re-check before publishing (docs/creator-store-scout.md).",
+  "assets": {
+    "Pine":      {"id": "5616880673", "creator": "see store", "role": "terrain pine trees (473)", "fit": "height"},
+    "Bush":      {"id": "7191673673", "role": "foliage (fow) lines", "fit": "height"},
+    "Rock":      {"id": "121683951170092", "role": "rock dressing", "fit": "height"},
+    "GunPistol": {"id": "15284785812", "role": "held pistols", "fit": "length"},
+    "GunRifle":  {"id": "4762550889", "role": "held rifles / AK family", "fit": "length"},
+    "GunShotgun":{"id": "102599014388952", "role": "held shotguns", "fit": "length"},
+    "GunSmg":    {"id": "6169371009", "role": "held SMGs", "fit": "length"},
+    "Barrel":    {"id": "5228772587", "role": "explosive oil barrels", "fit": "height"},
+    "Container": {"id": "8473839456", "role": "container yard", "fit": "length"}
+  }
+}

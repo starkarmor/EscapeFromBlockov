@@ -127,6 +127,11 @@ function CameraRig.update(dt: number, tx: number, tz: number, a: AimInput)
 	cam.CameraType = Enum.CameraType.Scriptable
 	-- CameraArm.Update: ease to the blended volumes (pitch 5/s, yaw and distance 2/s)
 	local tp, ty, td = armGoal(tx, tz)
+	-- Studio-only inspection fixture: the "DevZoom" attribute (metres) pulls the arm in for close captures
+	local devZoom = game:GetService("Players").LocalPlayer:GetAttribute("DevZoom")
+	if typeof(devZoom) == "number" and game:GetService("RunService"):IsStudio() then
+		td = devZoom
+	end
 	if pitch ~= tp or dist ~= td or armYaw ~= ty then
 		pitch += (tp - pitch) * math.min(1, 5 * dt)
 		armYaw += (ty - armYaw) * math.min(1, 2 * dt)

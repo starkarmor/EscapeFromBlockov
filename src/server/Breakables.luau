@@ -55,6 +55,13 @@ function Breakables.start()
 		band.CFrame = barrel.CFrame
 		band.Parent = barrel
 		barrel.Parent = folder
+		-- the Creator Store barrel look when imported (server/Dress.luau); the cylinder stays as the collider
+		local look = require(script.Parent.Dress).barrel(CFrame.new(b.x * S, 0, b.z * S), size[2] * S)
+		if look then
+			look.Parent = barrel
+			barrel.Transparency = 1
+			band.Transparency = 1
+		end
 		local hp = b.hp
 		local key = {}
 		local dead = false
@@ -81,7 +88,11 @@ function Breakables.start()
 					barrel.Size = Vector3.new(0.25 * S, size[1] * S, size[1] * S)
 					barrel.CFrame = CFrame.new(b.x * S, 0.125 * S, b.z * S) * CFrame.Angles(0, 0, math.pi / 2)
 					barrel.Color = Color3.fromHex("#2A2420")
+					barrel.Transparency = 0
 					band:Destroy()
+					if look then
+						look:Destroy()
+					end
 					task.delay(0.05, Breakables.explode, Vector3.new(b.x, 0, b.z), b.radius, b.damage, { ap = b.ap, armorBreak = b.armorBreak, from = info and info.from })
 					return true
 				end

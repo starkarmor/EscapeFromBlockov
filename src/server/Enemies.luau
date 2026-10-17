@@ -191,6 +191,7 @@ function Enemies.spawn(kind: string, x: number, z: number): Enemy
 		idleUntil = os.clock() + rand(0, 3),
 	}
 	enemies[e.id] = e
+	model:SetAttribute("Gun", if def.melee then nil else e.gun)
 	Weapons.targets[e] = {
 		kind = "enemy",
 		team = 1,
@@ -508,6 +509,7 @@ local function rollSpawners()
 					if k == "scrapper_rifle" then
 						local e = Enemies.spawn("scrapper", pt.x, pt.z)
 						e.gun = "ak74u"
+						e.model:SetAttribute("Gun", "ak74u")
 					elseif PORTED[k] then
 						Enemies.spawn(k, pt.x, pt.z)
 					end
