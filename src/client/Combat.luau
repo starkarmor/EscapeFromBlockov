@@ -13,6 +13,7 @@ local Net = require(Shared.Net)
 local Config = require(Shared.Config)
 local PC = require(script.Parent.PlayerControl)
 local CameraRig = require(script.Parent.CameraRig)
+local S = require(Shared.Units).S
 local Fx = require(script.Parent.Fx)
 local Vision = require(script.Parent.Vision)
 local Sfx = require(script.Parent.Sfx)
@@ -182,8 +183,9 @@ local function fire(g: any, id: string)
 	for _, a in yaws do
 		Fx.tracer(mz, a, slope, g.BulletSpeed, Guns.range(g), true)
 	end
-	Fx.muzzle(mz, PC.facing)
-	Sfx.play(if (g.ShootSpeed or 1) >= 8 then "rifle" else "pistol")
+	Fx.muzzle(mz, PC.facing, "#ffd27a", true, Vector3.new(PC.pos.X, 0, PC.pos.Y))
+	-- World.fireGun: 'shotgun' for a multi-pellet shot
+	Sfx.play(if n > 1 then "shotgun" elseif (g.ShootSpeed or 1) >= 8 then "rifle" else "pistol")
 	predictedMag = math.max(0, Combat.mag() - 1)
 	predictUntil = os.clock() + 0.5
 	-- scatter grow, recoil, camera kick
@@ -207,7 +209,7 @@ end
 function Combat.update(dt: number)
 	updateRecoil(dt)
 	local id = player:GetAttribute("Gun")
-	local g = if typeof(id) == "string" and PC.held == "gun" then Guns.row(id) else nil
+	local g = if typeof(id) == "string" and PC.held == "gun" then Guns.rowWith(id, game:GetService("Players").LocalPlayer:GetAttribute("GunAtt")) else nil
 	PC.gun = g
 	if g then
 		local def, max, _, recover = Guns.scatterNow(g, PC.ads)
@@ -262,19 +264,10 @@ function Combat.start()
 			Sfx.play("reload")
 		end
 	end)
+	-- World.requestUse: audio 'use' when an item use starts
 	player:GetAttributeChangedSignal("UseId"):Connect(function()
-		if player:GetAttribute("UseId") == "bandage" then
-			Sfx.play("bandage")
-		end
-	end)
-	local lastHp = 1e9
-	player:GetAttributeChangedSignal("HP"):Connect(function()
-		local hp = player:GetAttribute("HP")
-		if typeof(hp) == "number" then
-			if hp < lastHp - 0.5 then
-				Sfx.play("hurt")
-			end
-			lastHp = hp
+		if player:GetAttribute("UseId") then
+			Sfx.play(if player:GetAttribute("UseId") == "bandage" then "bandage" else "use")
 		end
 	end)
 	Workspace.AttributeChanged:Connect(function(name)
@@ -285,8 +278,9 @@ function Combat.start()
 	Net.event("Extracted").OnClientEvent:Connect(function()
 		Sfx.play("extract")
 	end)
-	Net.event("Toast").OnClientEvent:Connect(function(text: string)
-		if string.sub(text, 1, 1) == "+" then
+	Net.event("Toast").OnClientEvent:Connect(function(_text: string, kind: string?)
+		-- World: audio 'pickup' with every obtained item (the loose pick up)
+		if kind == "obtained" then
 			Sfx.play("pickup")
 		end
 	end)
@@ -310,18 +304,44 @@ function Combat.start()
 			held = false
 		end
 	end)
-	Net.event("Fx").OnClientEvent:Connect(function(kind: string, a: any, b: any, c: any, d: any, e: any)
+	-- a release outside the window never arrives as InputEnded: losing focus lets go of the trigger
+	UserInputService.WindowFocusReleased:Connect(function()
+		held = false
+	end)
+	Net.event("Fx").OnClientEvent:Connect(function(kind: string, a: any, b: any, c: any, d: any, e: any, f: any)
 		if kind == "hit" then
+			-- World: the player hit by a bullet / blow plays 'death' when it killed, else 'hurt' (ticks stay silent)
+			if a.me then
+				Sfx.play(if a.kill then "death" else "hurt")
+			end
 			Fx.hit(a)
 			if a.mine or a.me then
 				Fx.damageNumber(a.at, a.dmg, a.crit)
 			end
 			return
 		end
+		if kind == "tick" then
+			-- a = the tick's damage: the number over the player at 3.2 m
+			local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if r and typeof(a) == "number" then
+				Fx.damageNumber(Vector3.new(r.Position.X / S, 1.2, r.Position.Z / S), a, false)
+			end
+			return
+		elseif kind == "phurt" then
+			-- a = the hurt character, b = damage, c = it is me: the orange flash (+ the number for its owner)
+			if typeof(a) == "Instance" and a:IsA("Model") then
+				Fx.hitFlash(a, Color3.fromHex("#ffb347"))
+				local r = a:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if c and r and typeof(b) == "number" then
+					Fx.damageNumber(Vector3.new(r.Position.X / S, 0.615, r.Position.Z / S), b, false)
+				end
+			end
+			return
+		end
 		if kind == "shot" then
-			-- someone else's shot: a = muzzle (m), b = yaws, c = slope, d = speed, e = range
+			-- someone else's shot: a = muzzle (m), b = yaws, c = slope, d = speed, e = range, f = the muzzle flash colour
 			for _, yaw in b do
-				Fx.tracer(a, yaw, c, d, e, false)
+				Fx.tracer(a, yaw, c, d, e, false, f)
 			end
 			-- a shot outside the view cone shows as a sound marker (WorldUI sound markers)
 			local rel = Vector2.new(a.X, a.Z) - PC.pos
@@ -332,15 +352,11 @@ function Combat.start()
 					Combat.onSound(a)
 				end
 			end
-			Fx.muzzle(a, b[1])
-			Sfx.at(if d >= 100 then "rifle" else "pistol", a, 60)
+			Fx.muzzle(a, b[1], f, false)
+			Sfx.at(if #b > 1 then "shotgun" elseif d >= 100 then "rifle" else "pistol", a, 60)
 		elseif kind == "explode" or kind == "flash" then
 			-- a = centre (m), b = radius, c = the item's shake factor (World.blast: 0.4 x shake within 30 m)
-			if kind == "flash" then
-				Fx.flash(a, b)
-			else
-				Fx.explode(a, b)
-			end
+			Fx.explode(a, b)
 			local dist = (Vector2.new(a.X, a.Z) - PC.pos).Magnitude
 			if dist < 30 and (c or 1) > 0 then
 				CameraRig.shake(0.4 * (c or 1), "explosion", Vector2.new(a.X - PC.pos.X, a.Z - PC.pos.Y))
@@ -354,18 +370,19 @@ function Combat.start()
 				snd:Destroy()
 			end)
 		elseif kind == "impact" then
-			Fx.impact(a, b)
+			-- the burst comes from the local bullet arriving there (Fx.tracer)
 			Sfx.at("impact", a, 25)
 		elseif kind == "debris" then
-			Fx.impact(a, Vector3.yAxis)
+			Fx.debris(a)
 			Sfx.at("impact", a, 25)
 		end
 	end)
 	-- hit marker for the player's own hits (damage > 1.01 or a kill); the number comes with the "hit" fx
 	Net.event("Hit").OnClientEvent:Connect(function(kill: boolean, crit: boolean, _at: Vector3?, dmg: number?)
+		-- World.damageEnemy: audio 'kill' / 'hit'
+		Sfx.play(if kill then "kill" else "hitmarker")
 		if kill or (dmg or 0) > 1.01 then
 			Fx.hitMarker(kill, crit)
-			Sfx.play("hitmarker")
 		end
 	end)
 end
