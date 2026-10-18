@@ -181,8 +181,8 @@
    "next": "save the place; tools/import_assets.py rebuilds it"
   },
   {
-   "gap": "drone hacking (Takeover.ts) not ported",
-   "next": "port with the takeover controls"
+   "gap": "drone hacking (Takeover.ts): needs HackSkillLevel >= 2 (bunker perk tree) and a hacker device, neither reachable in a raid-only slice",
+   "next": "port with the base slice"
   }
  ]
 }
