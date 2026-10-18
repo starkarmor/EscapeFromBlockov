@@ -75,10 +75,11 @@ local function roll(row: any): { Item }
 	local out: { Item } = {}
 	local slots = row.slots or 5
 	local function add(id: string, n: number)
-		if #out >= slots then
+		-- World.addRolled: an id the catalogue does not have (the pools' "" entries) is a draw that adds nothing
+		local it = Items.items[id]
+		if #out >= slots or not it or n <= 0 then
 			return
 		end
-		local it = Items.items[id]
 		local max = (it and it.maxStack) or 1
 		for _, s in out do
 			if s.id == id and s.n < max then
@@ -236,7 +237,28 @@ local function makeProp(b: Box)
 	b.part = p
 end
 
+-- an item the catalogue does not know (no name, no description, the fallback icon) never reaches a container: it is
+-- reported with where it came from and dropped
+local unknownSeen: { [string]: boolean } = {}
+local function sanitize(list: { Item }, where: string)
+	for i = #list, 1, -1 do
+		local it = list[i]
+		if typeof(it) ~= "table" or typeof(it.id) ~= "string" or not Items.items[it.id] or (tonumber(it.n) or 0) <= 0 then
+			local key = where .. ":" .. tostring(typeof(it) == "table" and it.id)
+			if not unknownSeen[key] then
+				unknownSeen[key] = true
+				warn(string.format("[Blockov] dropped an unknown item id=%q n=%s from %s", tostring(typeof(it) == "table" and it.id),
+					tostring(typeof(it) == "table" and it.n), where), debug.traceback())
+				Workspace:SetAttribute("UnknownItems", (tostring(Workspace:GetAttribute("UnknownItems") or "")) .. key .. " ")
+			end
+			table.remove(list, i)
+		end
+	end
+end
+Loot.sanitize = sanitize
+
 local function publish(b: Box)
+	sanitize(b.items, b.kind .. " " .. tostring(b.label))
 	Workspace:SetAttribute("Box_" .. akey(b.id), b.rolled and #b.items or -1)
 	local searched = b.rolled
 	for _, it in b.items do
@@ -342,6 +364,7 @@ local function openBox(p: Player, b: Box)
 		b.rolled = true
 		local row = (b.table and Items.tables[b.table]) or (b.container and Items.types[b.container])
 		b.items = if row then roll(row) else {}
+		sanitize(b.items, "roll " .. tostring(b.table or b.container))
 		Inv.layout(b.items)
 	end
 	Loot.slotsOf(b)
@@ -850,7 +873,7 @@ function Loot.start()
 					local c = d.count or { 1, 1 }
 					for _ = 1, math.random(c[1], c[2]) do
 						local id = pick(d.pool or {})
-						if id then
+						if id and Items.items[id] then
 							table.insert(list, { id = id, n = spawnCount(id), revealed = false, ammo = if Items.items[id] and Items.items[id].fire then math.random(0, 5) else nil })
 						end
 					end
@@ -861,6 +884,42 @@ function Loot.start()
 			Loot.addBox("body", pos.X, pos.Z, "Body", list, nil, model)
 		end
 	end)
+	if RunService:IsStudio() then
+		-- Studio audit: Workspace attribute LootAudit = true rolls every container table / type and every enemy body
+		-- table 200 times; unknown ids land in UnknownItems (and the output)
+		Workspace:GetAttributeChangedSignal("LootAudit"):Connect(function()
+			if Workspace:GetAttribute("LootAudit") ~= true then
+				return
+			end
+			local rolls = 0
+			for name, row in Items.tables do
+				for _ = 1, 200 do
+					sanitize(roll(row), "audit table " .. name)
+					rolls += 1
+				end
+			end
+			for name, row in Items.types do
+				for _ = 1, 200 do
+					sanitize(roll(row), "audit type " .. name)
+					rolls += 1
+				end
+			end
+			for kind, body in Items.bodies do
+				for _ = 1, 200 do
+					local list = {}
+					for _, d in body.drops do
+						local id = pick(d.pool or {})
+						if id and Items.items[id] then
+							table.insert(list, { id = id, n = 1 })
+						end
+					end
+					sanitize(list, "audit body " .. kind)
+					rolls += 1
+				end
+			end
+			Workspace:SetAttribute("LootAudit", string.format("done %d rolls", rolls))
+		end)
+	end
 	Net.event("Interact").OnServerEvent:Connect(interact)
 	Net.event("InteractCancel").OnServerEvent:Connect(function(p)
 		holds[p] = nil
