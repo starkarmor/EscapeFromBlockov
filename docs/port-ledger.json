@@ -221,6 +221,12 @@
    "system": "LootView side-by-side",
    "result": "layout, panels, wallet, equipment grid, items grid, pet bag, weight bar and hotbar editor match the web capture; slot labels now use the web autoSize (one line, 12-20 px) and item names clip like .nm",
    "evidence": "artifacts/screens/web_lootview_ref.png vs artifacts/screens/lootview_side_by_side_roblox.png (same 1684x1080 viewport)"
+  },
+  {
+   "system": "gamepad and touch controls (native adaptation: the web build is keyboard + mouse only)",
+   "result": "gamepad: left stick move, right stick aim (virtual cursor 2.5-8 m out), RT fire, LT ADS, LS run latch, A roll, X interact, Y reload, B cancel, RB weapon cycle, D-pad hotbar pick + LB use, D-pad up/down options / ammo list, RS ammo type, View tap backpack / hold quick menu; LootView focus cursor (A carry/drop, X quick action, Y menu, B back); map pan/zoom/marker; photo mode. Touch: floating move and aim-fire sticks (tap = one shot), Roll / Reload / Aim / Run / contextual Interact, Bag / Map / More, tappable HUD weapons / hotbar / ammo / cancel, LootView long-press menu, map pinch / long-press / close, photo buttons. Key hints switch to platform button images (gamepad) or hide (touch); the Controls panel and photo instructions list each device's bindings",
+   "evidence": "Studio Play with injected gamepad buttons (stick fixture DevPad): moved 7 m, RT one shot (8->7), Y reload, RB melee/gun cycle, inventory carry+drop, menu Add to Hotbar, LB used the bound carrot, B cancelled; touch via DevTouch fixture and clicks on the touch buttons: stick move 5.4 m in 1.2 s, aim tap and push fired, Reload, Roll, HUD V / 1 taps, Bag, long-press menu, quick menu, photo mode, map close; keyboard / mouse click-select and drag regression passed",
+   "note": "not exercised on physical devices: real multi-finger touch, real analog sticks, and engine GUI selection inside the gamepad quick menu (Studio's input tool sends gamepad buttons as keyboard events without stick values and cannot send touches)"
   }
  ],
  "open": [
@@ -258,8 +264,8 @@
    "next": "keep (art brief) or import a matching Creator Store font if the user wants exact typography"
   },
   {
-   "gap": "touch and gamepad input paths are not ported (the web build is keyboard + mouse only)",
-   "next": "user decision: PC-only like the source, or add native touch / gamepad bindings"
+   "gap": "physical-device pass for touch (phone/tablet safe areas, two fingers) and a real controller (analog sticks, quick-menu selection)",
+   "next": "Studio Device Emulator / a phone via Team Test, and an Xbox/PS controller on the Mac"
   }
  ]
 }

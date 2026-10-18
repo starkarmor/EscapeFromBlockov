@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "project_root": "/Users/joel/Desktop/Vibecoding/Games/EscapeFromBlockov/roblox",
-  "revision": 3,
-  "updated_at": "2026-10-18T17:45:19+00:00",
+  "revision": 4,
+  "updated_at": "2026-10-18T18:59:23+00:00",
   "objective": "Faithful 1:1 native Roblox port of the web game as Escape from Blockov (Ground Zero raid slice): the player is their own Roblox avatar, enemies are Creator Store models, never the Duckov/Canuckov names; full game feel, UI interactions and player feedback as in the web build; multiplayer in one server",
   "status": "working",
   "source_authority": {
@@ -95,6 +95,18 @@
       "path": "/Users/joel/.claude/skills/robloxification/SKILL.md",
       "sha256": "6c5931d65f887a76a50844fa19801697487d0fc3944002569f41f5ccd17170ed",
       "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-input",
+      "path": "/Users/joel/.claude/skills/roblox-input/SKILL.md",
+      "sha256": "526c91fba4f5fe278f647f02ba17ff41a0a0f9c4fb228821448ba229991a2990",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-camera",
+      "path": "/Users/joel/.claude/skills/roblox-camera/SKILL.md",
+      "sha256": "41b4b99a63b811275a5db295233f12c9f8227547f4a670a6af751435fa6b735d",
+      "read_at": "2026-10-18"
     }
   ],
   "decisions": [
@@ -103,7 +115,8 @@
     "Layout/colliders/loot/spawners exported from the running web build (tools/export_map.mjs -> tools/convert_map.py)",
     "Server-authoritative inventory (InvOp ops), bullets, damage and loot; client LootView is a 1:1 port of InventoryUI at the 2560x1440 reference",
     "Weapon icons are ViewportFrame renders of the Creator Store gun models (the pack ships no icons)",
-    "UI font FredokaOne per docs/art-brief.md (web M PLUS Rounded 1c is not built in)"
+    "UI font FredokaOne per docs/art-brief.md (web M PLUS Rounded 1c is not built in)",
+    "Gamepad/touch as native adaptations: buttons press the keyboard key they stand for (Controls.onKey), sticks feed a virtual aim cursor; the device follows the last input"
   ],
   "evidence": [
     {
@@ -147,18 +160,25 @@
       "method": "real-input Studio runs and fixtures",
       "date": "2026-10-18",
       "limits": "see ledger notes"
+    },
+    {
+      "claim": "Gamepad and touch controls drive every web action (movement, aim, fire, actions, LootView, map, photo mode)",
+      "artifact": "docs/port-ledger.json (gamepad and touch controls entry)",
+      "method": "Studio Play: injected gamepad buttons + DevPad/DevTouch fixtures + clicks on touch buttons, state read back",
+      "date": "2026-10-18",
+      "limits": "no physical touch device or controller; quick-menu engine selection unexercised"
     }
   ],
   "known_limitations": [
-    "Touch and gamepad input not ported (the web build is keyboard + mouse only): user decision",
     "Quest log / tracker / objective toasts and unlock notifications not ported (base-game systems; proposed session task_29b676e5)",
     "Audio ids are Creator Store community uploads: replace with owned/licensed SFX before publishing",
     "CreatorAssets (guns incl. RPG-7 and Recurve Bow, NPCs) exist only in the open place until the user saves",
-    "Performance not measured on a low-end/mobile device"
+    "Performance not measured on a low-end/mobile device",
+    "Gamepad/touch not yet exercised on physical devices (Studio injection has no stick values or touches)"
   ],
   "next_actions": [
     "User saves the place (Ctrl+S) to keep CreatorAssets",
-    "Decide touch/gamepad scope",
+    "Physical-device pass: phone touch and a controller",
     "Start the quest-log port session"
   ],
   "pending_jobs": [],
@@ -170,6 +190,10 @@
     {
       "task": "Remaining docs/port-ledger.json open entries",
       "acceptance": "matched web vs Roblox screenshots + real-input checks"
+    },
+    {
+      "task": "Push the roblox/ port to github.com/starkarmor/EscapeFromBlockov",
+      "acceptance": "remote main has the port history"
     }
   ],
   "scope": [
@@ -178,16 +202,17 @@
     "Roblox toy look per docs/art-brief.md"
   ],
   "selected_skills": [
-    "roblox-game-director",
-    "threejs-to-roblox-port",
-    "roblox-studio-playtest",
-    "roblox-studio-mcp",
-    "roblox-game-development",
-    "roblox-world-ui-design",
-    "roblox-input",
-    "roblox-audio",
     "luau-performance",
+    "roblox-audio",
+    "roblox-camera",
     "roblox-creator-assets",
-    "robloxification"
+    "roblox-game-development",
+    "roblox-game-director",
+    "roblox-input",
+    "roblox-studio-mcp",
+    "roblox-studio-playtest",
+    "roblox-world-ui-design",
+    "robloxification",
+    "threejs-to-roblox-port"
   ]
 }
