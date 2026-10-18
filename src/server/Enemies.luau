@@ -607,7 +607,8 @@ local function shootOnce(e: Enemy)
 	if not row or not at then
 		return
 	end
-	local mz = Guns.muzzle(e.gun, e.pos.X, e.pos.Y, e.facing)
+	local aimAt0 = posOf(e.foe) or e.aimPos
+	local mz = Guns.muzzle(e.gun, e.pos.X, e.pos.Y, e.facing, if aimAt0 then math.atan2(aimAt0.X - e.pos.X, aimAt0.Y - e.pos.Y) else nil, e.def.kind)
 	local base = math.atan2(at.X - mz.X, at.Y - mz.Z)
 	-- Enemy.scatterDeg: gunScatter x max(0.1, scatter x (1 + m)); m = 3 vs a running player, >= 4 off screen
 	local m = 1
@@ -1611,9 +1612,7 @@ local function loadTracks(e: Enemy)
 	if e.tracks.idle then
 		e.tracks.idle:Play()
 	end
-	if e.tracks.hold and not e.def.melee then
-		e.tracks.hold:Play()
-	end
+	-- guns: the arms are posed by the IK hold (server/Dress.luau), no hold clip
 	e.anim = "idle"
 end
 

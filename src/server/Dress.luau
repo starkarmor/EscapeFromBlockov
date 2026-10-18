@@ -195,6 +195,175 @@ local function gunModel(id: string): string
 	return "GunRifle"
 end
 
+-- ------------------------------------------------------------------ firearms on humanoids
+-- The web holds the gun in the right hand at the decoded socket (gz_holdpose rightHand 0.2904, 0.5244, 0.2347 m from the
+-- feet), pointing along the facing, its muzzle at the per-gun Muzzle socket (Items.muzzle). Here each weapon has its own
+-- Creator Store model (CreatorAssets/Guns, tools/import_gunpack.py) welded to the right hand's grip attachment; IKControls
+-- put that hand on the socket and the left hand on the foregrip (long guns) or under the grip (pistols), so the body
+-- that is drawn holds the gun where the bullets leave it.
+local PACK: { [string]: string } = {
+	pm = "Makarova", tt33 = "Bloxxing Hi-Power", g17 = "Geist 17", deagle = "AceShot .45",
+	ak47 = "Kalash-200", ak103 = "KPFD-408", ak74u = "Kalash-200", rpk = "Kalash-200", adar = "E22",
+	m4a1 = "Klobb M4-A1 TACTICAL", mcx_spear = "Forge Tac SCAR L", mk47 = "Forge Tac SCAR H", ash12 = "Forge Tac SCAR H",
+	mdr556 = "C8-Tactical", mdr762 = "Bernadetta LK-160", aug_a1 = "Klobb XR177", aug_a3 = "Klobb XR177",
+	m14 = "FAL", m1a = "Klobb M-16-A1", sks = "FAL", vpo101 = "Bernadetta LK-160", vpo136 = "Klobb M-16-A1",
+	asval = "Bernadetta KPX", sr3m = "Bernadetta KPX", vss = "Forge Tac Inception", bizon = "Bernadetta KPX", ppsh = "Bernadetta KPX",
+	mp5 = "Charlie and Satina MP-5", mp7 = "Charlie & Satina MP-7", ump45 = "Charlie and Satina UMP-45 LW", uzi = "Uzi", vector = "Tecci",
+	m700 = "RC BALLISTA", sv98 = "AWPer", mosin = "Bloxchester 1894", toz106 = "Bloxchester 1894", m107 = "M-82",
+	rpd = "U-100 MK II", mmg = "M-60", shotgun_homemade = "1887", toz66 = "1887", mp155 = "M1014",
+	egun_storm = "E22", egun_spider = "U-100 MK II",
+}
+-- where the right hand grips, as a fraction of the gun's length from its rear (stocks reach back past the hand)
+local function gripFraction(id: string): (number, boolean)
+	local it = Guns.items[id]
+	local f = it and it.fire
+	local model = PACK[id] or ""
+	local pistol = (f and ((f.caliber == "S" and (f.mag or 30) <= 13) or (f.caliber == "MAG" and (f.mag or 8) <= 8))) or model == "Makarova" or model == "Geist 17"
+	if pistol then
+		return 0.12, true
+	elseif model == "Uzi" or model == "Tecci" then
+		return 0.42, false
+	end
+	return 0.36, false
+end
+
+local function clearGun(char: Model)
+	for _, n in { "HeldGun", "GunGripTarget", "GunForeTarget" } do
+		local x = char:FindFirstChild(n, true)
+		if x then
+			x:Destroy()
+		end
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		for _, n in { "GunIK_R", "GunIK_L" } do
+			local x = hum:FindFirstChild(n)
+			if x then
+				x:Destroy()
+			end
+		end
+	end
+end
+
+-- the rest pose of a part relative to the root through its Motor6D chain (no animation Transform)
+local function restFromRoot(part: BasePart, root: BasePart): CFrame
+	local chain: { Motor6D } = {}
+	local p: BasePart? = part
+	while p and p ~= root do
+		local motor: Motor6D? = nil
+		for _, m in p:GetChildren() do
+			if m:IsA("Motor6D") and m.Part1 == p then
+				motor = m
+			end
+		end
+		if not motor then
+			break
+		end
+		table.insert(chain, 1, motor)
+		p = motor.Part0 :: BasePart?
+	end
+	local cf = CFrame.identity
+	for _, m in chain do
+		cf = cf * m.C0 * m.C1:Inverse()
+	end
+	return cf
+end
+
+local function holdGun(char: Model, gunId: string): boolean
+	local guns = assets and assets:FindFirstChild("Guns")
+	local tpl = guns and PACK[gunId] and guns:FindFirstChild(PACK[gunId]) :: Model?
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local torso = char:FindFirstChild("UpperTorso") :: BasePart?
+	local rHand = char:FindFirstChild("RightHand") :: BasePart?
+	local lHand = char:FindFirstChild("LeftHand") :: BasePart?
+	if not tpl or not hum or not root or not torso or not rHand or not lHand then
+		return false
+	end
+	local rGrip = rHand:FindFirstChild("RightGripAttachment") :: Attachment?
+	local lGrip = lHand:FindFirstChild("LeftGripAttachment") :: Attachment?
+	if not rGrip or not lGrip then
+		return false
+	end
+	local m = Guns.muzzleLocal(gunId)
+	local it = Guns.items[gunId]
+	local reach = if m then m.Z else ((it and it.fire and it.fire.length) or 0.5)
+	local up = if m then m.Y else 0.13
+	local g, pistol = gripFraction(gunId)
+	local L = math.max(0.18, reach / (1 - g)) -- metres, muzzle at the front end
+	local gun = tpl:Clone()
+	gun.Name = "HeldGun"
+	local size0 = gun:GetAttribute("Size0") :: Vector3
+	gun:ScaleTo(L * S / size0.X)
+	local _, size = gun:GetBoundingBox()
+	-- the grip socket in the root's frame (root faces -Z; the feet are rootHeight below its centre). Pistols: the web's
+	-- one-handed socket exactly; long guns sit 0.12 m further in so the left hand reaches the foregrip.
+	local rootH = hum.HipHeight + root.Size.Y / 2
+	local h = Guns.hand("player")
+	if not pistol then
+		h = Vector3.new(h.X - 0.12, h.Y + 0.06, h.Z - 0.04)
+	end
+	local socket = CFrame.new(h.X * S, h.Y * S - rootH, -h.Z * S) -- agent frame: -Z forward, +Y up
+	-- the model in the agent frame: its +X (muzzle) onto -Z, the muzzle at (0, up, -reach)
+	local modelInAgent = CFrame.new(0, up * S - size.Y * 0.25, -(reach * S - size.X / 2)) * CFrame.Angles(0, math.pi / 2, 0)
+	local torsoRest = restFromRoot(torso, root)
+	local rootPart = gun.PrimaryPart :: BasePart
+	gun:PivotTo(root.CFrame * socket * modelInAgent)
+	for _, d in gun:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = false
+			d.Massless = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			if d ~= rootPart then
+				local w = Instance.new("WeldConstraint")
+				w.Part0 = rootPart
+				w.Part1 = d
+				w.Parent = d
+			end
+		end
+	end
+	-- mounted on the upper torso (it bobs and rolls with the body), placed from the rest pose
+	local weld = Instance.new("Weld")
+	weld.Name = "GunWeld"
+	weld.Part0 = torso
+	weld.Part1 = rootPart
+	weld.C0 = torsoRest:Inverse() * socket * modelInAgent
+	weld.Parent = rootPart
+	-- grips on the gun for the hands: the right hand's grip attachment matches the agent frame (-Z out of the fist)
+	local agentInModel = modelInAgent:Inverse()
+	local tR = Instance.new("Attachment")
+	tR.Name = "GunGripTarget"
+	tR.CFrame = agentInModel
+	tR.Parent = rootPart
+	local tL = Instance.new("Attachment")
+	tL.Name = "GunForeTarget"
+	tL.CFrame = agentInModel * CFrame.new(0, (up * 0.25) * S, -math.min(0.28, reach * 0.5) * S)
+	tL.Parent = rootPart
+	gun.Parent = char
+	local function ik(name: string, chainRoot: Instance, eff: Attachment, target: Attachment, kind: Enum.IKControlType)
+		local c = Instance.new("IKControl")
+		c.Name = name
+		c.Type = kind
+		c.ChainRoot = chainRoot
+		c.EndEffector = eff
+		c.Target = target
+		c.Weight = 1
+		c.SmoothTime = 0.03
+		c.Parent = hum
+	end
+	local rUpper = char:FindFirstChild("RightUpperArm")
+	local lUpper = char:FindFirstChild("LeftUpperArm")
+	if rUpper then
+		ik("GunIK_R", rUpper, rGrip, tR, Enum.IKControlType.Transform)
+	end
+	if lUpper and not pistol then
+		ik("GunIK_L", lUpper, lGrip, tL, Enum.IKControlType.Position)
+	end
+	return true
+end
+
 -- the held item on a humanoid (avatar or store enemy): a Tool in the character so Roblox's own grip and Animate's
 -- one-arm hold (toolnone) / toolanim Slash carry it. The R15 grip attachment points the Handle's -Z out of the fist,
 -- along the raised arm, and its +Y up.
@@ -204,7 +373,11 @@ local function holdTool(char: Model, gunId: string?, held: any)
 	if old then
 		old:Destroy()
 	end
+	clearGun(char)
 	if char:GetAttribute("Dead") then
+		return
+	end
+	if held == "gun" and gunId and holdGun(char, gunId) then
 		return
 	end
 	local tool = Instance.new("Tool")

@@ -888,7 +888,7 @@ function Hud.update(dt: number)
 	-- cover marker
 	R.cover.Visible = false
 	if g and alive and not PC.blocked then
-		local mz = Guns.muzzle(gid :: string, PC.pos.X, PC.pos.Y, PC.facing)
+		local mz = Guns.muzzle(gid :: string, PC.pos.X, PC.pos.Y, PC.facing, math.atan2(PC.aim.X - PC.pos.X, PC.aim.Y - PC.pos.Y))
 		local to = Vector3.new(PC.aim.X, mz.Y, PC.aim.Y)
 		local hit = Workspace:Raycast(mz * S, (to - mz) * S, coverParams)
 		if hit then

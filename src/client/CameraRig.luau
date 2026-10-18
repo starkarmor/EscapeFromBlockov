@@ -215,6 +215,21 @@ function CameraRig.update(dt: number, tx: number, tz: number, a: AimInput)
 		end
 	end
 	place(cam, Vector3.new(sx, 0, sz))
+	-- Studio-only inspection fixture: player attribute DevCam = "yawDeg,distM,heightM" orbits the character for close QA
+	local devCam = game:GetService("Players").LocalPlayer:GetAttribute("DevCam")
+	if typeof(devCam) == "string" and game:GetService("RunService"):IsStudio() then
+		local ya, di, he = string.match(devCam, "([%-%d%.]+),([%d%.]+),([%-%d%.]+)")
+		if ya then
+			-- yaw relative to the character's facing (0 = in front of it, 90 = its right side)
+			local char = game:GetService("Players").LocalPlayer.Character
+			local rootPart = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local look = if rootPart then rootPart.CFrame.LookVector else Vector3.new(0, 0, 1)
+			local yaw = math.atan2(look.X, look.Z) + math.rad(tonumber(ya) :: number)
+			local d, hh = (tonumber(di) :: number) * S, (tonumber(he) :: number) * S
+			local c = Vector3.new(tx * S, 0.55 * S, tz * S)
+			cam.CFrame = CFrame.lookAt(c + Vector3.new(math.sin(yaw) * d, hh, math.cos(yaw) * d), c)
+		end
+	end
 end
 
 --- the cursor on the y = h metres plane (metres, x/z)

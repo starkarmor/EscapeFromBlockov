@@ -8,9 +8,9 @@ local Avatar = {}
 local Units = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").Units)
 local S = Units.S
 
--- the web character stands 1.107 m (Config.Body.modelTop); Roblox heads read larger, so the avatar is fitted a little
--- taller to keep the same body/leg proportion against doors and props
-Avatar.HEIGHT = 1.2 * S
+-- the web character stands 1.107 m (Config.Body.modelTop): the avatar is fitted to exactly that, so the decoded hand
+-- socket, muzzles and head line up with the body that is drawn
+Avatar.HEIGHT = 1.107 * S
 
 local OFF = {
 	Enum.HumanoidStateType.Jumping,
@@ -50,10 +50,19 @@ function Avatar.prepare(model: Model, height: number?)
 	local hum = model:FindFirstChildOfClass("Humanoid") :: Humanoid
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 	-- fit the height first (Model:ScaleTo scales the Humanoid's hip height with the body)
-	local _, size = model:GetBoundingBox()
+	-- the body's height from the feet to the top of the head (hats and hair do not count)
 	local want = height or Avatar.HEIGHT
-	if size.Y > 0.1 then
-		model:ScaleTo(model:GetScale() * want / size.Y)
+	local head = model:FindFirstChild("Head") :: BasePart?
+	local bodyH: number
+	if head then
+		local feet = root.Position.Y - (hum.HipHeight + root.Size.Y / 2)
+		bodyH = head.Position.Y + head.Size.Y / 2 - feet
+	else
+		local _, size = model:GetBoundingBox()
+		bodyH = size.Y
+	end
+	if bodyH > 0.1 then
+		model:ScaleTo(model:GetScale() * want / bodyH)
 	end
 	hum.BreakJointsOnDeath = false
 	hum.RequiresNeck = false

@@ -158,7 +158,7 @@ local function fire(g: any, id: string)
 	end
 	burstLeft -= 1
 	local aimYaw = math.atan2(PC.aim.X - PC.pos.X, PC.aim.Y - PC.pos.Y)
-	local mz = Guns.muzzle(id, PC.pos.X, PC.pos.Y, PC.facing)
+	local mz = Guns.muzzle(id, PC.pos.X, PC.pos.Y, PC.facing, aimYaw)
 	local toAim = (PC.aim - PC.pos).Magnitude
 	local aimed = toAim > (Vector2.new(mz.X, mz.Z) - PC.pos).Magnitude + 0.1
 	local base = if aimed then math.atan2(PC.aim.X - mz.X, PC.aim.Y - mz.Z) else aimYaw

@@ -124,6 +124,16 @@ L.append('M.types = ' + lua(loot['types']))
 L.append('M.pools = ' + lua(pools))
 L.append('M.bodies = ' + lua(bodies))
 L.append('M.throw = ' + lua(throw))
+# gz_holdpose.json muzzle: the gun agent's Muzzle socket (agent frame on the hand socket: x right, y up, z forward)
+hold = json.load(open(os.path.join(GZ, 'gz_holdpose.json')))
+ENEMY_GUN_KEYS = {'egun_spider': 'Item_EnemyGun_Spider_Rifle', 'egun_storm': 'Item_EGun_AR_Storm_NoGraphic', 'egun_ring': 'Item_EGun_Magic_Ring_Mushroom'}
+muzzle = {}
+for gid in list(guns):
+    key = ENEMY_GUN_KEYS.get(gid) or items.get(gid, {}).get('key')
+    if key and key in hold['muzzle']:
+        muzzle[gid] = hold['muzzle'][key]
+L.append('M.muzzle = ' + lua(muzzle))
+L.append('M.holdModels = ' + lua(hold['models']))
 L.append('M.throwPhysics = ' + lua(throw_rows['physics']))
 L.append('return M')
 open(os.path.join(OUT, 'Items.luau'), 'w').write('\n'.join(L) + '\n')
