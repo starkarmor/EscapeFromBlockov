@@ -2194,7 +2194,12 @@ local function rollSpawners()
 	-- selector groups: pick [min, max] distinct options of the group
 	local options: { [string]: { number } } = {}
 	local pickOf: { [string]: { number } } = {}
-	for _, sp in MapData.spawners or {} do
+	-- the main map's spawners plus the cave's (storm stormlings)
+	local all = table.clone(MapData.spawners or {})
+	for _, sp in require(Shared.CaveData).spawners or {} do
+		table.insert(all, sp)
+	end
+	for _, sp in all do
 		if sp.group then
 			options[sp.group] = options[sp.group] or {}
 			if not table.find(options[sp.group], sp.option or 0) then
@@ -2213,7 +2218,7 @@ local function rollSpawners()
 			chosen[g][table.remove(pool, math.random(1, #pool))] = true
 		end
 	end
-	for _, sp in MapData.spawners or {} do
+	for _, sp in all do
 		if sp.group and not chosen[sp.group][sp.option or 0] then
 			continue
 		end

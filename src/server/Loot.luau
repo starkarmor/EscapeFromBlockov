@@ -23,7 +23,16 @@ local Loot = {}
 
 type Item = { id: string, n: number, revealed: boolean, ammo: number? }
 type Box = { id: string, kind: string, x: number, z: number, r: number, label: string, hold: number, table: string?, container: string?, rolled: boolean, items: { Item }, part: BasePart?, data: any }
+-- the main map's interacts plus the cave sub-scene's (src/shared/CaveData.luau, ids prefixed cave_)
+local INTERACTS = table.clone(MapData.interacts)
+for _, it in require(Shared.CaveData).interacts do
+	table.insert(INTERACTS, it)
+end
 local boxes: { [string]: Box } = {}
+-- interact ids become attribute names: anything outside [%w_] is replaced (some decoded ids carry ':' and '/')
+local function akey(id: string): string
+	return (string.gsub(id, "[^%w_]", "_"))
+end
 Loot.boxes = boxes
 local open: { [Player]: { box: Box, searchT: number } } = {}
 local holds: { [Player]: { box: Box, t: number } } = {}
@@ -224,14 +233,14 @@ local function makeProp(b: Box)
 end
 
 local function publish(b: Box)
-	Workspace:SetAttribute("Box_" .. b.id, b.rolled and #b.items or -1)
+	Workspace:SetAttribute("Box_" .. akey(b.id), b.rolled and #b.items or -1)
 	local searched = b.rolled
 	for _, it in b.items do
 		if not it.revealed then
 			searched = false
 		end
 	end
-	Workspace:SetAttribute("BoxS_" .. b.id, searched)
+	Workspace:SetAttribute("BoxS_" .. akey(b.id), searched)
 end
 
 local function view(b: Box): { any }
@@ -386,7 +395,7 @@ local function build(p: Player, b: Box)
 	end
 	Net.event("Toast"):FireClient(p, if #d.cost.items > 0 then "Built!" else "Opened", "good")
 	boxes[b.id] = nil
-	Workspace:SetAttribute("Box_" .. b.id, nil)
+	Workspace:SetAttribute("Box_" .. akey(b.id), nil)
 end
 
 function Loot.finish(p: Player, b: Box)
@@ -408,6 +417,25 @@ function Loot.finish(p: Player, b: Box)
 		end
 	elseif b.kind == "loader" then
 		Net.event("Toast"):FireClient(p, b.label .. ": not in this slice yet", "bad")
+	elseif b.kind == "note" then
+		local t = require(Shared.Notes)[b.data.note]
+		if t then
+			Net.event("Note"):FireClient(p, t[1], t[2])
+		end
+	elseif b.kind == "beacon" then
+		local flag = b.data.flag or "beacon"
+		flags[flag] = true
+		Workspace:SetAttribute("Flag_" .. flag, true)
+		Net.event("Toast"):FireClient(p, "Beacon Activated", "good")
+		boxes[b.id] = nil
+		Workspace:SetAttribute("Box_" .. akey(b.id), nil)
+	elseif b.kind == "wall" then
+		-- the cracked wall's interact never opens it: explosions break it (World.ts "Requires Explosives")
+		if not flags[b.data.flag or "wall"] then
+			Net.event("Toast"):FireClient(p, "Requires Explosives", "bad")
+		end
+	elseif b.kind == "station" then
+		Net.event("Toast"):FireClient(p, "The workbench is not in this slice yet", "bad")
 	else
 		Net.event("Toast"):FireClient(p, b.label, nil)
 	end
@@ -483,7 +511,7 @@ end
 function Loot.start()
 	-- containers and interacts from the export (each container exists with its decoded chance)
 	local n = 0
-	for _, it in MapData.interacts do
+	for _, it in INTERACTS do
 		if it.kind == "container" then
 			if math.random() <= (it.chance or 1) then
 				local b: Box = { id = it.id, kind = "container", x = it.x, z = it.z, r = 1.9, label = "", hold = if it.container == "tech" then 0.6 else 0, table = it.table, container = it.container, rolled = false, items = {}, part = nil, data = nil }
@@ -496,14 +524,18 @@ function Loot.start()
 			local data = nil
 			if it.kind == "teleport" and it.label == "Go" then
 				-- the SimpleTeleporter pair
-				for _, o in MapData.interacts do
+				for _, o in INTERACTS do
 					if o.kind == "teleport" and o.label == "Go" and o ~= it then
 						data = { to = Vector2.new(o.x + 1.5, o.z) }
 					end
 				end
 			end
+			if it.kind == "teleport" and not data and it.arrive then
+				-- MultiSceneTeleporter: the cave entrance / exit, to the other sub-scene's arrival point
+				data = { to = Vector2.new(it.arrive.x, it.arrive.z) }
+			end
 			if it.kind == "teleport" and not data then
-				continue -- sub-scene teleports (the cave) are not in this slice
+				continue
 			end
 			local b: Box = { id = it.id, kind = it.kind, x = it.x, z = it.z, r = math.max(it.r or 1.8, 1.8), label = it.label or it.kind, hold = it.hold or 0, table = nil, container = nil, rolled = true, items = {}, part = nil, data = data }
 			boxes[b.id] = b
@@ -566,7 +598,16 @@ function Loot.start()
 			end
 		end
 	end
-	for _, it in MapData.interacts do
+	for _, it in INTERACTS do
+		if it.kind == "note" or it.kind == "beacon" or it.kind == "wall" or it.kind == "station" then
+			local b: Box = { id = it.id, kind = it.kind, x = it.x, z = it.z, r = math.max(it.r or 1.8, 1.8), label = it.label or it.kind, hold = it.hold or 0, table = nil, container = nil, rolled = true, items = {}, part = nil,
+				data = { note = it.note, flag = it.flag } }
+			-- TeleportBeacon.Start: an unlocked beacon hides its interact
+			if not (it.kind == "beacon" and flags[it.flag or "beacon"]) then
+				boxes[b.id] = b
+				publish(b)
+			end
+		end
 		if it.kind == "construct" then
 			local b: Box = { id = it.id, kind = "construct", x = it.x, z = it.z, r = it.r or 2.4, label = it.label or "Build", hold = it.hold or 0, table = nil, container = nil, rolled = true, items = {}, part = nil,
 				data = { flag = it.flag, cost = it.cost or { money = 0, items = {} } } }
@@ -629,7 +670,7 @@ function Loot.start()
 	for _, ex in MapData.exits or {} do
 		column(ex.x, ex.z, ex.r or 3, 4, "EXTRACT")
 	end
-	for _, it in MapData.interacts do
+	for _, it in INTERACTS do
 		if it.kind == "hatch" and it.label == "Enter Bunker" then
 			column(it.x, it.z, 1.2, 3.5, "BUNKER")
 		end

@@ -64,6 +64,27 @@ function DayNight.update(dt: number?)
 	end
 	local hour = (cm / 60) % 24
 	local storm = (Workspace:GetAttribute("StormPhase") or 0) > 0
+	-- the cave (an indoor sub-scene): hemisphere #8a9cb0 / #1a1f24 at 0.6, no sun, fog, no rain or storm tint
+	local PC = require(script.Parent.PlayerControl)
+	local CB = require(game:GetService("ReplicatedStorage").Shared.CaveData).bounds
+	local indoor = PC.pos.X >= CB.minX and PC.pos.X <= CB.maxX and PC.pos.Y >= CB.minZ and PC.pos.Y <= CB.maxZ
+	if indoor then
+		-- the web's fog starts past the camera distance (45 + 4 m), so the play area stays clear: thin atmosphere only
+		Lighting.ClockTime = 12
+		Lighting.Brightness = 0
+		Lighting.OutdoorAmbient = hex("#8a9cb0")
+		Lighting.Ambient = hex("#8a9cb0"):Lerp(hex("#1a1f24"), 0.3)
+		local atm0 = Lighting:FindFirstChildOfClass("Atmosphere")
+		if atm0 then
+			atm0.Color = hex("#040608")
+			atm0.Decay = hex("#040608")
+			atm0.Density = 0.05
+			atm0.Haze = 0
+		end
+		tint.BackgroundTransparency = 1
+		rainLayer.Visible = false
+		return
+	end
 	local k = math.clamp(math.sin(((hour - 5.5) / 15) * math.pi), 0, 1)
 	local dayLit = k > 0.05
 	local sunColor = if dayLit then lerpC(hex("#ffb070"), hex("#fff3d6"), math.min(1, 1.6 * k)) else hex("#8fa6d8")

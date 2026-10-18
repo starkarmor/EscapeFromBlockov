@@ -59,10 +59,16 @@ local function refreshPoints()
 	for _, d in MapData.doors or {} do
 		points[d.id] = { id = d.id, kind = "door", label = "Open", x = d.x, z = d.z, r = 1.9, hold = d.interactTime or 0.2, key = d.key }
 	end
-	for _, it in MapData.interacts do
+	local all = table.clone(MapData.interacts)
+	for _, it in require(Shared.CaveData).interacts do
+		table.insert(all, it)
+	end
+	for _, it in all do
 		if it.kind == "construct" then
 			points[it.id] = { id = it.id, kind = "construct", label = it.label or "Build", x = it.x, z = it.z, r = it.r or 2.4, hold = it.hold or 0, flag = it.flag, cost = (it.cost and it.cost.items) or {} }
-		elseif it.kind == "hatch" or (it.kind == "teleport" and it.label == "Go") or it.kind == "loader" then
+		elseif it.kind == "note" or it.kind == "beacon" or it.kind == "wall" or it.kind == "station" then
+			points[it.id] = { id = it.id, kind = it.kind, label = it.label, x = it.x, z = it.z, r = math.max(it.r or 1.8, 1.8), hold = it.hold or 0, flag = it.flag }
+		elseif it.kind == "hatch" or (it.kind == "teleport" and (it.label == "Go" or it.arrive ~= nil)) or it.kind == "loader" then
 			points[it.id] = { id = it.id, kind = it.kind, label = it.label, x = it.x, z = it.z, r = math.max(it.r or 1.8, 1.8), hold = it.hold or 0 }
 		end
 	end
@@ -105,11 +111,20 @@ local function optionFor(pt: Point): Hud.PromptOpt?
 	if pt.kind == "construct" and Workspace:GetAttribute("Flag_" .. (string.gsub(tostring(pt.flag), "[^%w_]", "_"))) then
 		return nil
 	end
+	if pt.kind == "beacon" and Workspace:GetAttribute("Flag_" .. (pt.flag or "beacon")) then
+		return nil -- an unlocked beacon hides its interact
+	end
+	if pt.kind == "wall" then
+		if Workspace:GetAttribute("Flag_" .. (pt.flag or "wall")) then
+			return nil
+		end
+		return { label = pt.label, sel = false, req = "Requires Explosives", reqOk = false }
+	end
 	if pt.kind == "container" or pt.kind == "body" then
 		local typ = Items.types[pt.label]
 		local name = if pt.kind == "body" then "Loot" else (if typ then typ.name else pt.label)
-		local count = Workspace:GetAttribute("Box_" .. pt.id)
-		if Workspace:GetAttribute("BoxS_" .. pt.id) == true and count == 0 then
+		local count = Workspace:GetAttribute("Box_" .. (string.gsub(pt.id, "[^%w_]", "_")))
+		if Workspace:GetAttribute("BoxS_" .. (string.gsub(pt.id, "[^%w_]", "_"))) == true and count == 0 then
 			if pt.kind == "body" then
 				return nil -- an emptied body / tomb is hidden from interaction
 			end

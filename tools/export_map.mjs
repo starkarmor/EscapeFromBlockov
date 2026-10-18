@@ -6,7 +6,8 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5188';
 const out = process.argv[2] ?? 'roblox/data/ground_zero.json';
-const browser = await chromium.launch({ channel: 'chromium' });
+const which = process.argv[3] ?? 'zone'; // 'cave': the Ground Zero cave sub-scene (B.caveMap())
+const browser = await chromium.launch({ executablePath: process.env.HOME + '/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing' });
 try {
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
   page.on('pageerror', (e) => console.error('pageerror', String(e).slice(0, 300)));
@@ -14,13 +15,13 @@ try {
   await page.waitForFunction(() => !!window.__BLOCKOV__, null, { timeout: 120000 });
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 5);
   await page.waitForTimeout(1000);
-  const data = await page.evaluate(async () => {
+  const data = await page.evaluate(async (which) => {
     const B = window.__BLOCKOV__;
     B.profile().flags['visited:Base'] = true;
     await B.deploy('entrance');
     B.step(5);
     const w = B.world();
-    const m = w.map;
+    const m = which === 'cave' ? B.caveMap() : w.map;
     const r = (v, k = 3) => +(+v).toFixed(k);
     const meshes = [];
     const T = m.group.position.constructor; // THREE.Vector3
@@ -77,11 +78,11 @@ try {
       interacts: clean(m.interacts), spawners: clean(m.spawners), exits: clean(m.exits), exitCount: clean(m.exitCount), extractPads: clean(m.extractPads),
       doors: clean(m.doors), covers: clean(m.covers), regions: clean(m.regions), looseRows: clean(m.looseRows), looseSpots: clean(m.looseSpots),
       fishSpots: clean(m.fishSpots), breakableRows: clean(m.breakableRows), source: clean(m.source),
-      lights: m.lights.map((l) => ({ t: l.type, c: '#' + l.color.getHexString(), i: r(l.intensity), d: r(l.distance ?? 0), p: [r(l.position.x), r(l.position.y), r(l.position.z)] })),
+      lights: (m.lights ?? []).map((l) => ({ t: l.type, c: '#' + l.color.getHexString(), i: r(l.intensity), d: r(l.distance ?? 0), p: [r(l.position.x), r(l.position.y), r(l.position.z)] })),
       player: { x: r(w.player.pos.x), z: r(w.player.pos.z) },
       meshes,
     };
-  });
+  }, which);
   fs.mkdirSync(out.replace(/\/[^/]+$/, ''), { recursive: true });
   fs.writeFileSync(out, JSON.stringify(data));
   const kinds = {};

@@ -184,6 +184,9 @@ end
 
 --- the closest navmesh point to (x, z)
 function Nav.snap(x: number, z: number): (number, number)
+	if Nav.inCave and Nav.inCave(x, z) then
+		return x, z
+	end
 	local i = Nav.locate(x, z)
 	if i == 0 then
 		return x, z
@@ -407,6 +410,213 @@ function Nav.findPath(ax: number, az: number, bx: number, bz: number, hintY: num
 	pts = reverse(subdivide(pts, 3))
 	pts = greedy(pts)
 	return reverse(pts)
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- NavGrid (Nav.ts 430-535): the cave sub-scene has no decoded navmesh. 0.5 m cells over its bounds, a cell free unless its
+-- centre is inside a body-blocking box grown by 0.3; 8 neighbours without corner cutting; clear() samples every
+-- 0.125 m. Same A* and post-processing as the mesh.
+local CaveData = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").CaveData)
+local CELL = 0.5
+local GB = CaveData.bounds
+local GW = math.ceil((GB.maxX - GB.minX) / CELL)
+local GH = math.ceil((GB.maxZ - GB.minZ) / CELL)
+local free = table.create(GW * GH, true)
+do
+	for _, b in CaveData.body do
+		local x0, z0, x1, z1 = b[1] - 0.3, b[2] - 0.3, b[3] + 0.3, b[4] + 0.3
+		for gx = math.max(0, math.floor((x0 - GB.minX) / CELL)), math.min(GW - 1, math.floor((x1 - GB.minX) / CELL)) do
+			local cx = GB.minX + (gx + 0.5) * CELL
+			if cx > x0 and cx < x1 then
+				for gz = math.max(0, math.floor((z0 - GB.minZ) / CELL)), math.min(GH - 1, math.floor((z1 - GB.minZ) / CELL)) do
+					local cz = GB.minZ + (gz + 0.5) * CELL
+					if cz > z0 and cz < z1 then
+						free[gz * GW + gx + 1] = false
+					end
+				end
+			end
+		end
+	end
+end
+
+local function inCave(x: number, z: number): boolean
+	return x >= GB.minX and x <= GB.maxX and z >= GB.minZ and z <= GB.maxZ
+end
+Nav.inCave = inCave
+
+local function cellOf(x: number, z: number): (number, number)
+	return math.floor((x - GB.minX) / CELL), math.floor((z - GB.minZ) / CELL)
+end
+local function isFree(gx: number, gz: number): boolean
+	return gx >= 0 and gz >= 0 and gx < GW and gz < GH and free[gz * GW + gx + 1]
+end
+local function gridLocate(x: number, z: number): number
+	local gx, gz = cellOf(x, z)
+	if isFree(gx, gz) then
+		return gz * GW + gx + 1
+	end
+	for r = 1, 200 do
+		local best, bd = 0, math.huge
+		for dz = -r, r do
+			for dx = -r, r do
+				if math.max(math.abs(dx), math.abs(dz)) == r and isFree(gx + dx, gz + dz) then
+					local d = dx * dx + dz * dz
+					if d < bd then
+						bd, best = d, (gz + dz) * GW + gx + dx + 1
+					end
+				end
+			end
+		end
+		if best > 0 then
+			return best
+		end
+	end
+	return 0
+end
+local function gcentre(n: number): (number, number)
+	local i = n - 1
+	return GB.minX + (i % GW + 0.5) * CELL, GB.minZ + (i // GW + 0.5) * CELL
+end
+local function gridClear(ax: number, az: number, bx: number, bz: number): boolean
+	local d = math.sqrt((bx - ax) ^ 2 + (bz - az) ^ 2)
+	local n = math.max(1, math.ceil(d / (CELL * 0.25)))
+	for k = 0, n do
+		local t = k / n
+		local gx, gz = cellOf(ax + (bx - ax) * t, az + (bz - az) * t)
+		if not isFree(gx, gz) then
+			return false
+		end
+	end
+	return true
+end
+
+local gSeen: { number } = {}
+local gScore2: { number } = {}
+local gParent: { number } = {}
+local gStamp = 0
+local function gridAstar(s: number, goal: number, bx: number, bz: number): { number }?
+	gStamp += 1
+	hn = 0
+	gSeen[s] = gStamp
+	gScore2[s] = 0
+	gParent[s] = 0
+	local sx, sz = gcentre(s)
+	hpush(s, math.sqrt((sx - bx) ^ 2 + (sz - bz) ^ 2))
+	local expanded = 0
+	while hn > 0 do
+		local n = hpop()
+		if n == goal then
+			local out = {}
+			local k = n
+			while k > 0 do
+				table.insert(out, 1, k)
+				k = gParent[k]
+			end
+			return out
+		end
+		expanded += 1
+		if expanded > MAX_EXPAND then
+			return nil
+		end
+		local i = n - 1
+		local gx, gz = i % GW, i // GW
+		local nx, nz = gcentre(n)
+		for dz = -1, 1 do
+			for dx = -1, 1 do
+				if (dx ~= 0 or dz ~= 0) and isFree(gx + dx, gz + dz) and (dx == 0 or dz == 0 or (isFree(gx + dx, gz) and isFree(gx, gz + dz))) then
+					local m = (gz + dz) * GW + gx + dx + 1
+					local mx, mz = gcentre(m)
+					local ng = gScore2[n] + math.sqrt((mx - nx) ^ 2 + (mz - nz) ^ 2)
+					if not (gSeen[m] == gStamp and ng >= gScore2[m]) then
+						gSeen[m] = gStamp
+						gScore2[m] = ng
+						gParent[m] = n
+						hpush(m, ng + math.sqrt((mx - bx) ^ 2 + (mz - bz) ^ 2))
+					end
+				end
+			end
+		end
+	end
+	return nil
+end
+
+local function gridGreedy(points: { Vector2 }): { Vector2 }
+	local out = {}
+	local n = #points
+	local i = 1
+	while i <= n do
+		local a = points[i]
+		table.insert(out, a)
+		local mn, mx = 1, 2
+		while true do
+			local j = i + mx
+			if j > n then
+				mx = n - i + 1
+				break
+			end
+			if not gridClear(a.X, a.Y, points[j].X, points[j].Y) then
+				break
+			end
+			mn = mx
+			mx *= 2
+		end
+		while mn + 1 < mx do
+			local mid = (mn + mx) // 2
+			local p = points[i + mid]
+			if gridClear(a.X, a.Y, p.X, p.Y) then
+				mn = mid
+			else
+				mx = mid
+			end
+		end
+		i += mn
+	end
+	return out
+end
+
+local function gridPath(ax: number, az: number, bx: number, bz: number): { Vector2 }?
+	local s = gridLocate(ax, az)
+	local g = gridLocate(bx, bz)
+	if s == 0 or g == 0 then
+		return nil
+	end
+	local nodes = gridAstar(s, g, bx, bz)
+	if not nodes then
+		return nil
+	end
+	local pts: { Vector2 } = {}
+	for _, n in nodes do
+		local x, z = gcentre(n)
+		table.insert(pts, Vector2.new(x, z))
+	end
+	-- ClosestOnNode: clamp the ends into their cells
+	local sx, sz = gcentre(s)
+	pts[1] = Vector2.new(math.clamp(ax, sx - CELL / 2, sx + CELL / 2), math.clamp(az, sz - CELL / 2, sz + CELL / 2))
+	local ex, ez = gcentre(g)
+	local last = Vector2.new(math.clamp(bx, ex - CELL / 2, ex + CELL / 2), math.clamp(bz, ez - CELL / 2, ez + CELL / 2))
+	if #pts == 1 then
+		table.insert(pts, last)
+	else
+		pts[#pts] = last
+	end
+	if gridClear(pts[1].X, pts[1].Y, last.X, last.Y) then
+		return { pts[1], last }
+	end
+	pts = gridGreedy(pts)
+	pts = reverse(subdivide(pts, 3))
+	pts = gridGreedy(pts)
+	return reverse(pts)
+end
+
+local meshFindPath = Nav.findPath
+function Nav.findPath(ax: number, az: number, bx: number, bz: number, hintY: number?): { Vector2 }?
+	if inCave(ax, az) or inCave(bx, bz) then
+		if inCave(ax, az) and inCave(bx, bz) then
+			return gridPath(ax, az, bx, bz)
+		end
+		return nil
+	end
+	return meshFindPath(ax, az, bx, bz, hintY)
 end
 
 local t0 = os.clock()

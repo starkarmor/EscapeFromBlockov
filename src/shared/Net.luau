@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Net = {}
-local EVENTS = { "StopAction", "Equip", "Unequip", "Melee", "Fire", "Reload", "Dodge", "Interact", "InteractCancel", "SelectSlot", "Sprint", "Aim", "UseItem", "Hit", "Fx", "Toast", "RaidState", "LootOpen", "LootTake", "Extracted", "Died", "Throw" }
+local EVENTS = { "StopAction", "Equip", "Unequip", "Melee", "Fire", "Reload", "Dodge", "Interact", "InteractCancel", "SelectSlot", "Sprint", "Aim", "UseItem", "Hit", "Fx", "Toast", "RaidState", "LootOpen", "LootTake", "Extracted", "Died", "Throw", "Note" }
 local FUNCTIONS = { "Deploy" }
 
 local folder: Folder

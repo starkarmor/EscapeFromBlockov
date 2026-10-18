@@ -46,6 +46,9 @@
       },
       "GroundZero": {
         "$path": "src/world/GroundZero.rbxmx"
+      },
+      "GroundZeroCave": {
+        "$path": "src/world/GroundZeroCave.rbxmx"
       }
     },
     "Lighting": {

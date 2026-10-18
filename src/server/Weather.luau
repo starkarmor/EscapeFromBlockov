@@ -151,7 +151,12 @@ function Weather.hour(): number
 	return (Weather.clock / 60) % 24
 end
 
+local CaveB = require(Shared.CaveData).bounds
 local function sheltered(p: Vector3): boolean
+	-- indoor sub-scenes shelter (the cave), then the building footprints
+	if p.X >= CaveB.minX and p.X <= CaveB.maxX and p.Z >= CaveB.minZ and p.Z <= CaveB.maxZ then
+		return true
+	end
 	for _, b in MapData.shelters or {} do
 		if p.X >= b.minX and p.X <= b.maxX and p.Z >= b.minZ and p.Z <= b.maxZ then
 			return true

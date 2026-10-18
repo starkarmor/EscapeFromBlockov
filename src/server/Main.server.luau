@@ -40,6 +40,7 @@ do
 		if flags then
 			flags[flag] = true
 		end
+		workspace:SetAttribute("Flag_" .. flag, true)
 	end
 	Cover.start(flags)
 end

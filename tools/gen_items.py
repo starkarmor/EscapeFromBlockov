@@ -33,7 +33,9 @@ def lua(v):
 
 # the Ground Zero map's container tables (the exported interacts carry their table ids)
 md = json.load(open(os.path.join(ROOT, 'data/ground_zero.json')))
-used_tables = sorted({i.get('table') for i in md['interacts'] if i.get('kind') == 'container' and i.get('table')})
+cave_path = os.path.join(ROOT, 'data/gz_cave.json')
+cave_interacts = json.load(open(cave_path))['interacts'] if os.path.exists(cave_path) else []
+used_tables = sorted({i.get('table') for i in md['interacts'] + cave_interacts if i.get('kind') == 'container' and i.get('table')})
 tables = {}
 need = set()
 for t in used_tables:
@@ -42,7 +44,21 @@ for t in used_tables:
         # the box's own decoded table missing: fall back to its container type
         continue
     tables[t] = row
-pools = {}
+# the cave's own tables and blueprint items (src/world/gz/cave_spawns.json): inline pools become named pools
+cave_spawns_path = os.path.join(WEB, 'src/world/gz/cave_spawns.json')
+cave_pools = {}
+if os.path.exists(cave_spawns_path):
+    cs = json.load(open(cave_spawns_path))
+    for x in cs.get('items', []):
+        items.setdefault(x['id'], x)
+    for tname, row in cs.get('tables', {}).items():
+        row = dict(row)
+        if isinstance(row.get('pool'), list):
+            pid = 'cave_' + tname
+            cave_pools[pid] = [[e['id'], e['w']] for e in row['pool'] if e.get('id')]
+            row['pool'] = pid if cave_pools[pid] else None
+        tables[tname] = row
+pools = dict(cave_pools)
 for row in list(tables.values()) + list(loot['types'].values()):
     pid = row.get('pool')
     if pid and pid in loot['pools']:
