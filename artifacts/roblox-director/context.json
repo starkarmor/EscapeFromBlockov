@@ -1,14 +1,15 @@
 {
   "schema_version": 1,
   "project_root": "/Users/joel/Desktop/Vibecoding/Games/EscapeFromBlockov/roblox",
-  "revision": 4,
-  "updated_at": "2026-10-18T18:59:23+00:00",
+  "revision": 5,
+  "updated_at": "2026-10-18T19:02:23+00:00",
   "objective": "Faithful 1:1 native Roblox port of the web game as Escape from Blockov (Ground Zero raid slice): the player is their own Roblox avatar, enemies are Creator Store models, never the reference game's or the web theme's names; full game feel, UI interactions and player feedback as in the web build; multiplayer in one server",
   "status": "working",
   "source_authority": {
     "rojo": "roblox/default.project.json",
     "serve": "rojo serve --port 34872 (plugin connected by the user)",
-    "place": "roblox/EscapeFromBlockov.rbxl (build artifact, gitignored)"
+    "place": "roblox/EscapeFromBlockov.rbxl (build artifact, gitignored)",
+    "git": "roblox/ is its own repository: github.com/starkarmor/EscapeFromBlockov (main); the outer EscapeFromCanuckov repo still tracks roblox/ files too"
   },
   "studio": {
     "status": "verified",
@@ -190,10 +191,6 @@
     {
       "task": "Remaining docs/port-ledger.json open entries",
       "acceptance": "matched web vs Roblox screenshots + real-input checks"
-    },
-    {
-      "task": "Push the roblox/ port to github.com/starkarmor/EscapeFromBlockov",
-      "acceptance": "remote main has the port history"
     }
   ],
   "scope": [
