@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "scanned_at": "2026-10-18T17:22:58+00:00",
+  "skills_root": "/Users/joel/.claude/skills",
+  "skill_count": 26,
+  "skills": [
+    {
+      "name": "luau-core",
+      "description": "Write or repair Luau syntax, tables, iteration, closures, metatables, and Lua compatibility. Use alongside Roblox development when a language-level issue affects the game.",
+      "path": "/Users/joel/.claude/skills/luau-core/SKILL.md",
+      "sha256": "b9a6dcd722b09f4436dcb1d0db2f36b30960ea78b28ece12a337f213f85c4dfb",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "luumenlabs/luau-skills",
+        "upstream_commit": "6550b6b4c36390b759b4a9ee04783a343c5883e2"
+      }
+    },
+    {
+      "name": "luau-performance",
+      "description": "Profile and optimize Luau execution, allocation, table layout, and hot loops. Use when measurable script cost or memory churn affects a Roblox experience.",
+      "path": "/Users/joel/.claude/skills/luau-performance/SKILL.md",
+      "sha256": "cd9f7d486ed89863809224f08b7112cdbd9556d0bc763c60aa4628f4ad6eea6f",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "luumenlabs/luau-skills",
+        "upstream_commit": "6550b6b4c36390b759b4a9ee04783a343c5883e2"
+      }
+    },
+    {
+      "name": "luau-types",
+      "description": "Design or repair Luau types, strict modules, generics, tagged unions, refinements, and metatable-backed APIs. Use for analyzer errors and stable Roblox module contracts.",
+      "path": "/Users/joel/.claude/skills/luau-types/SKILL.md",
+      "sha256": "4f038f4d268296c4793c04162b4b590023d4ddd9526a205572a46583d1e49021",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "luumenlabs/luau-skills",
+        "upstream_commit": "6550b6b4c36390b759b4a9ee04783a343c5883e2"
+      }
+    },
+    {
+      "name": "roblox-analytics",
+      "description": "Instrument native Roblox economy, funnel, and custom events with AnalyticsService. Use for measuring onboarding, progression, currency flows, and gameplay outcomes.",
+      "path": "/Users/joel/.claude/skills/roblox-analytics/SKILL.md",
+      "sha256": "1ff84277c506a717aca01ada93d649634e4f3258daf4767b8f5c1a1617dd5e0d",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "TabooHarmony/roblox-brain",
+        "upstream_commit": "38826be57ee37bcf023e9c2b85681bea3909281c"
+      }
+    },
+    {
+      "name": "roblox-animation",
+      "description": "Build Roblox rig animations, blending, marker events, IK, and UI tweens. Use for locomotion, attacks, emotes, procedural poses, and timed visual feedback.",
+      "path": "/Users/joel/.claude/skills/roblox-animation/SKILL.md",
+      "sha256": "47bd2eebef603d5dc05db9922628ed415445f620c96a0c8501632aff731bf9af",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "nonlooped/roblox-suite",
+        "upstream_commit": "c914ce65470a6eb1b28000b8c58d5543b48760ca"
+      }
+    },
+    {
+      "name": "roblox-audio",
+      "description": "Build or troubleshoot Roblox music, sound effects, spatial audio graphs, routing, ducking, and audio asset permissions. Use for native experience audio integration.",
+      "path": "/Users/joel/.claude/skills/roblox-audio/SKILL.md",
+      "sha256": "03940921f4ac7dc19080d073923429b91aaf5864f0645d73785898695ed0c14e",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "nonlooped/roblox-suite",
+        "upstream_commit": "c914ce65470a6eb1b28000b8c58d5543b48760ca"
+      }
+    },
+    {
+      "name": "roblox-camera",
+      "description": "Implement or tune native Roblox camera controllers, cutscenes, screen picking, collision avoidance, and camera shake. Use for first-person, third-person, or gameplay camera feel.",
+      "path": "/Users/joel/.claude/skills/roblox-camera/SKILL.md",
+      "sha256": "41b4b99a63b811275a5db295233f12c9f8227547f4a670a6af751435fa6b735d",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "TabooHarmony/roblox-brain",
+        "upstream_commit": "38826be57ee37bcf023e9c2b85681bea3909281c"
+      }
+    },
+    {
+      "name": "roblox-creator-assets",
+      "description": "Research and integrate Creator Store models, meshes, materials, audio, animations and UI assets into owned Roblox projects; inspect scripts, permissions, rig compatibility and cost. Use for development assets, not avatar purchases or experience popularity.",
+      "path": "/Users/joel/.claude/skills/roblox-creator-assets/SKILL.md",
+      "sha256": "ae6944a1b9251059f7801c9c883ac3b41a8d7e011188ec096d9142bc38ff3e9a",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-event-pass-designer",
+      "description": "Design, balance, and visually verify Roblox event or battle passes with reference-faithful Pass and Quests tabs, illustrated HUD entry, reward tracks, claim badges, Robux offers, and reviewable mockups. Use for reusable pass design, scoped native pass UI implementation or repair, and implementation handoff.",
+      "path": "/Users/joel/.claude/skills/roblox-event-pass-designer/SKILL.md",
+      "sha256": "e3e5c2d406059c26a710fa757d71192620202361ec165b5953a980dd7d13e8bb",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-game-development",
+      "description": "Build, repair and iterate native Roblox games in Luau and Studio, including gameplay, networking and progression. Use for owned Roblox projects and engine implementation; use roblox-research-lab for public-game research.",
+      "path": "/Users/joel/.claude/skills/roblox-game-development/SKILL.md",
+      "sha256": "d7f8894fb9d89b238b3311b6e90733014e2a12dbc9f24186cc85fe34669f19ea",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-game-director",
+      "description": "Coordinate native Roblox projects and research through the installed Roblox and Luau specialists. Use for building, improving, debugging, testing, or resuming an experience, or explicitly managing the Roblox capability roster and project continuity.",
+      "path": "/Users/joel/.claude/skills/roblox-game-director/SKILL.md",
+      "sha256": "5344119ae8d6c7163a163532cb16835c1fd677149406bc3f586a85e57e35e4a8",
+      "role": "director"
+    },
+    {
+      "name": "roblox-input",
+      "description": "Implement native Roblox action bindings and keyboard, mouse, touch, or gamepad controls. Use for gameplay contexts, menu focus, device switching, and input cleanup.",
+      "path": "/Users/joel/.claude/skills/roblox-input/SKILL.md",
+      "sha256": "526c91fba4f5fe278f647f02ba17ff41a0a0f9c4fb228821448ba229991a2990",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "TabooHarmony/roblox-brain",
+        "upstream_commit": "38826be57ee37bcf023e9c2b85681bea3909281c"
+      }
+    },
+    {
+      "name": "roblox-localization",
+      "description": "Implement Roblox localization tables, dynamic translated text, fallback handling, and locale-specific UI checks. Use for multilingual experience interfaces and content.",
+      "path": "/Users/joel/.claude/skills/roblox-localization/SKILL.md",
+      "sha256": "5fdd99363c00e3ac08e112be5beb5dd244c2a61f85196508f42535da697916c2",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "TabooHarmony/roblox-brain",
+        "upstream_commit": "38826be57ee37bcf023e9c2b85681bea3909281c"
+      }
+    },
+    {
+      "name": "roblox-npcs",
+      "description": "Build Roblox NPC patrol, chase, combat navigation, and state machines. Use for PathfindingService, blocked paths, traversal links, and scaling active agents.",
+      "path": "/Users/joel/.claude/skills/roblox-npcs/SKILL.md",
+      "sha256": "e5592746409576bde9fa1ff6bd505905065c320435ff33acf147a808ce75bd9c",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "nonlooped/roblox-suite",
+        "upstream_commit": "c914ce65470a6eb1b28000b8c58d5543b48760ca"
+      }
+    },
+    {
+      "name": "roblox-physics",
+      "description": "Build or diagnose Roblox assemblies, constraints, vehicles, moving platforms, collisions, and network ownership. Use when native physics behavior or simulation cost needs work.",
+      "path": "/Users/joel/.claude/skills/roblox-physics/SKILL.md",
+      "sha256": "f24f992d45b730ab432a79993fb3f2eae7bccfde7c0161508a7b8f962f015d61",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "nonlooped/roblox-suite",
+        "upstream_commit": "c914ce65470a6eb1b28000b8c58d5543b48760ca"
+      }
+    },
+    {
+      "name": "roblox-release",
+      "description": "Prepare, publish, device-test, review, and promote owned Roblox experiences. Use for private phone builds, release requirements, audience eligibility, moderation, launch readiness, updates, rollback, and acquisition plans.",
+      "path": "/Users/joel/.claude/skills/roblox-release/SKILL.md",
+      "sha256": "2f719d776e445cf26f2291eb38ad8241e11683249abaac0e53ee54d399f7edd7",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-release-assets",
+      "description": "Plan, generate, capture, export and verify Roblox experience icons, listing thumbnails, gameplay trailers, ad creatives, event art and social promo packs. Use for release marketing media and reusable asset pipelines.",
+      "path": "/Users/joel/.claude/skills/roblox-release-assets/SKILL.md",
+      "sha256": "aa3f98d3ce6cb0b830c1fe73532dfafe3c87bf9c53a27e6d9a533aa984489990",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-research-lab",
+      "description": "Operate Roblox Player, navigate Home/search/charts, join and play games, inspect settings and keybinds, and catalogue camera, controls, game feel and balance with screenshot evidence. Use for client gameplay research and evidence-backed genre templates. Studio instrumentation is an optional later workflow.",
+      "path": "/Users/joel/.claude/skills/roblox-research-lab/SKILL.md",
+      "sha256": "675f56f4904455f2e991d00c6abc6961950d891bac08c0eea57ab62cc87a03df",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-rewards-designer",
+      "description": "Design reference-matched Roblox playtime rewards, free and paid pass tracks, daily quests, illustrated HUD entry buttons and claim counts. Generates offline interactive mockups, asset packs and handoff specs; use for design and separately authorized native implementation with existing claim animation and badge standards.",
+      "path": "/Users/joel/.claude/skills/roblox-rewards-designer/SKILL.md",
+      "sha256": "c29f5faa5a429c1c0318ee2e98fa8b57227e84cccc3751d31ca7bceddce4123c",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-rojo",
+      "description": "Set up or repair Rojo filesystem-to-Studio projects, source mappings, builds, live sync, and sourcemaps. Use when an owned Roblox project uses or requests external source control.",
+      "path": "/Users/joel/.claude/skills/roblox-rojo/SKILL.md",
+      "sha256": "85d356b08e638e6f9ba25cb8f38a4211378682aacb7933cd518db5647a44eb32",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "nonlooped/roblox-suite",
+        "upstream_commit": "c914ce65470a6eb1b28000b8c58d5543b48760ca"
+      }
+    },
+    {
+      "name": "roblox-studio-mcp",
+      "description": "Connect Codex to Roblox Studio's built-in MCP, discover live schemas, select the correct place, and diagnose transport or session failures. Use for Studio setup and troubleshooting; public Player research belongs to roblox-research-lab.",
+      "path": "/Users/joel/.claude/skills/roblox-studio-mcp/SKILL.md",
+      "sha256": "19fc8217febc98a90d4615cde76ff35e1bcf5d2ba1706c18d350b52158b1f433",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-studio-playtest",
+      "description": "Playtest owned Roblox Studio places with real input, screenshots and state assertions; diagnose engine failures and verify multiplayer, devices, persistence and performance as needed. Use for native QA, not other creators' public Player games.",
+      "path": "/Users/joel/.claude/skills/roblox-studio-playtest/SKILL.md",
+      "sha256": "13cc345763eaa230cedb1a1afecb67b05930497b1e2646b3ac5d25eaa9a03f12",
+      "role": "specialist"
+    },
+    {
+      "name": "roblox-vfx",
+      "description": "Create and optimize native Roblox particles, beams, trails, bursts, and highlights. Use for gameplay feedback, animation-timed effects, and transparent rendering cost.",
+      "path": "/Users/joel/.claude/skills/roblox-vfx/SKILL.md",
+      "sha256": "1ea8b6728fe66afd0490cfc60c2cefbec600a4b611fdb6f0d494d31a72713988",
+      "role": "specialist",
+      "upstream": {
+        "upstream_repository": "nonlooped/roblox-suite",
+        "upstream_commit": "c914ce65470a6eb1b28000b8c58d5543b48760ca"
+      }
+    },
+    {
+      "name": "roblox-world-ui-design",
+      "description": "Build and polish native Roblox worlds, lighting, camera feel, feedback and responsive HUD/menu interfaces. Use for Roblox visual and interaction design with actual Studio screenshots and device checks.",
+      "path": "/Users/joel/.claude/skills/roblox-world-ui-design/SKILL.md",
+      "sha256": "e138be7a69b828be4b82e55146fef45f66b8ef60c55c8fc3406e26faa80d11fb",
+      "role": "specialist"
+    },
+    {
+      "name": "robloxification",
+      "description": "Direct and critique Roblox simulator, collector, steal-and-carry and tycoon visuals using bright studded toy worlds, chunky silhouettes, bold outlined UI and spectacular layered VFX. Use for Robloxification, reference fidelity and art drift, including browser games deliberately targeting this look. Preserve a project's approved aesthetic.",
+      "path": "/Users/joel/.claude/skills/robloxification/SKILL.md",
+      "sha256": "6c5931d65f887a76a50844fa19801697487d0fc3944002569f41f5ccd17170ed",
+      "role": "specialist"
+    },
+    {
+      "name": "threejs-to-roblox-port",
+      "description": "Port an existing Three.js game to native Roblox while preserving its authored visuals, scale, camera, UI and gameplay. Use for source-to-source ports and fidelity repairs, alongside the Roblox and Three.js directors.",
+      "path": "/Users/joel/.claude/skills/threejs-to-roblox-port/SKILL.md",
+      "sha256": "82b721afe7daf0d0ff1a85c25ac3cb2571a531ffe2f6beb3376102d8b0fb1b65",
+      "role": "specialist"
+    }
+  ],
+  "warnings": [],
+  "changes": {
+    "added": [
+      "luau-core",
+      "luau-performance",
+      "luau-types",
+      "roblox-analytics",
+      "roblox-animation",
+      "roblox-audio",
+      "roblox-camera",
+      "roblox-creator-assets",
+      "roblox-event-pass-designer",
+      "roblox-game-development",
+      "roblox-game-director",
+      "roblox-input",
+      "roblox-localization",
+      "roblox-npcs",
+      "roblox-physics",
+      "roblox-release",
+      "roblox-release-assets",
+      "roblox-research-lab",
+      "roblox-rewards-designer",
+      "roblox-rojo",
+      "roblox-studio-mcp",
+      "roblox-studio-playtest",
+      "roblox-vfx",
+      "roblox-world-ui-design",
+      "robloxification",
+      "threejs-to-roblox-port"
+    ],
+    "removed": [],
+    "changed": []
+  }
+}

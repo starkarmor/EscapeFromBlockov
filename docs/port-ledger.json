@@ -201,14 +201,29 @@
    "result": "P (no view open): free camera WASD / Q / E / Shift x4, mouse look 4.5, wheel FOV 5-60, RMB focus marker, Space capture (punch + shutter, 0.3 s lock), O instructions, K hint; HUD hidden; P / the Roblox menu leave it and restore the camera",
    "evidence": "real-key Studio run: camera moved under W, HUD disabled with the instruction panel shown, restored on P",
    "note": "adaptations: the shared server keeps running (the web pauses time); photos go to the player's Roblox captures (CaptureService)"
+  },
+  {
+   "system": "multiplayer (2 clients)",
+   "result": "independent raid states and bags (an item given to one player changes only that bag); both players open one shared pile and take its single item at the same server time: exactly one winner, no duplication, the pile empties; each client sees the count 0, an empty loot pane, the other player's character and Equip attribute",
+   "evidence": "StudioTestService.ExecuteMultiplayerTestAsync(2) with a temporary GetTestArgs-gated server driver and a signal-gated client driver firing the real Interact / InvOp remotes (8/8 checks): artifacts/roblox-director/mp-test-2026-10-18.json; temporary scripts removed afterwards"
+  },
+  {
+   "system": "specialist checks (input, server authority, audio)",
+   "result": "hotkeys ignore chat / TextBox input (processed); window focus loss clears held fire, an in-progress drag and Shift; InvOp validates sources, finite integers and split bounds, and a 20/s token bucket (burst 40) limits op spam; the audio preload reports failed clips (SfxFailed) and caps voices at 6 per sound",
+   "evidence": "Studio Play: SfxHolder SfxChecked=19, SfxFailed empty; console free of script errors"
+  },
+  {
+   "system": "LootView rebuild cost",
+   "result": "~500 instances per rebuild, only on discrete actions (open, click, drop, state push); built detached and parented once, old view destroyed after the frame: warm 13 -> 7-9 ms, cold first open ~26 ms (gun viewport render)",
+   "evidence": "Studio-only InvRenderMs / InvRenderParts telemetry per section; drag-to-slot retested with real input after the change"
+  },
+  {
+   "system": "LootView side-by-side",
+   "result": "layout, panels, wallet, equipment grid, items grid, pet bag, weight bar and hotbar editor match the web capture; slot labels now use the web autoSize (one line, 12-20 px) and item names clip like .nm",
+   "evidence": "artifacts/screens/web_lootview_ref.png vs artifacts/screens/lootview_side_by_side_roblox.png (same 1684x1080 viewport)"
   }
  ],
  "open": [
-  {
-   "gap": "multiplayer with 2+ clients not run",
-   "cause": "Studio's multi-client test session needs the ribbon player count (not reachable by automation)",
-   "next": "Test tab > Clients and Servers > 2 players > Start; code is per-player server state"
-  },
   {
    "gap": "Storm Zone / Hidden Warehouse loaders (other maps), fishing (needs a rod: none drops in Ground Zero; the bunker supplies it), merchant, quest board, fireworks, sacrifice totems (CostTaker)",
    "next": "base / next-map slices"
@@ -237,6 +252,14 @@
   {
    "gap": "web audio cues are synth tones; the port uses Creator Store clips (kill 73943243843673, death 9113480917, use 139673383893208, shotgun 136216209294970, throw 125346857027000, whistle 131977562833235)",
    "next": "replace with owned / licensed SFX before publishing (with the other community audio ids)"
+  },
+  {
+   "gap": "UI font family: the web uses M PLUS Rounded 1c (not a built-in Roblox font); the port uses FredokaOne per docs/art-brief.md, so glyph widths differ slightly",
+   "next": "keep (art brief) or import a matching Creator Store font if the user wants exact typography"
+  },
+  {
+   "gap": "touch and gamepad input paths are not ported (the web build is keyboard + mouse only)",
+   "next": "user decision: PC-only like the source, or add native touch / gamepad bindings"
   }
  ]
 }

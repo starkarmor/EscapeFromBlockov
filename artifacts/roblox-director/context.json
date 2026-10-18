@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project_root": "/Users/joel/Desktop/Vibecoding/Games/EscapeFromBlockov/roblox",
-  "revision": 2,
-  "updated_at": "2026-10-17T20:28:48+00:00",
-  "objective": "Native Roblox port of the Escape from Canuckov Ground Zero vertical slice: Roblox aesthetics, game feel 1:1 with the web build, multiplayer-ready; lobby/teamwork/monetization/social after the slice",
+  "revision": 3,
+  "updated_at": "2026-10-18T17:45:19+00:00",
+  "objective": "Faithful 1:1 native Roblox port of the web game as Escape from Blockov (Ground Zero raid slice): the player is their own Roblox avatar, enemies are Creator Store models, never the Duckov/Canuckov names; full game feel, UI interactions and player feedback as in the web build; multiplayer in one server",
   "status": "working",
   "source_authority": {
     "rojo": "roblox/default.project.json",
@@ -11,36 +11,164 @@
     "place": "roblox/EscapeFromBlockov.rbxl (build artifact, gitignored)"
   },
   "studio": {
-    "status": "unverified",
-    "studio_id": null,
-    "observed_at": null
+    "status": "verified",
+    "studio_id": "a2d6006d-2b3e-4a41-bdff-b9b1e1970530",
+    "observed_at": "2026-10-18",
+    "place": "EscapeFromBlockov.rbxl (Studio title EscapeFromCanuckov)",
+    "version": "0.743.0.7431133"
   },
   "tool_access": {
-    "status": "unverified",
-    "observed_at": null
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "notes": "Studio MCP via roblox/tools/mcp.py (execute_luau, user_mouse_input, user_keyboard_input, screen_capture, start_stop_play); web captures via tools/pw1.sh"
   },
   "constraints": [
-    "Never close/reopen/save the place from automation: Rojo live sync only (save dialogs are invisible to the agent)",
+    "Never close/reopen/save the place from automation: Rojo live sync only (port 34872); the user saves (Ctrl+S) to keep CreatorAssets",
+    "Strip scripts from Creator Store assets",
     "Subagents use model sonnet, max 2",
-    "Close every browser opened"
+    "Browser scripts only through tools/pw1.sh; never orphan browsers",
+    "No Duckov/Canuckov naming in the Roblox port; the beaver/goose theme is web-only"
   ],
-  "consulted_skills": [],
+  "consulted_skills": [
+    {
+      "name": "roblox-game-director",
+      "path": "/Users/joel/.claude/skills/roblox-game-director/SKILL.md",
+      "sha256": "5344119ae8d6c7163a163532cb16835c1fd677149406bc3f586a85e57e35e4a8",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "threejs-to-roblox-port",
+      "path": "/Users/joel/.claude/skills/threejs-to-roblox-port/SKILL.md",
+      "sha256": "82b721afe7daf0d0ff1a85c25ac3cb2571a531ffe2f6beb3376102d8b0fb1b65",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-studio-playtest",
+      "path": "/Users/joel/.claude/skills/roblox-studio-playtest/SKILL.md",
+      "sha256": "13cc345763eaa230cedb1a1afecb67b05930497b1e2646b3ac5d25eaa9a03f12",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-studio-mcp",
+      "path": "/Users/joel/.claude/skills/roblox-studio-mcp/SKILL.md",
+      "sha256": "19fc8217febc98a90d4615cde76ff35e1bcf5d2ba1706c18d350b52158b1f433",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-game-development",
+      "path": "/Users/joel/.claude/skills/roblox-game-development/SKILL.md",
+      "sha256": "d7f8894fb9d89b238b3311b6e90733014e2a12dbc9f24186cc85fe34669f19ea",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-world-ui-design",
+      "path": "/Users/joel/.claude/skills/roblox-world-ui-design/SKILL.md",
+      "sha256": "e138be7a69b828be4b82e55146fef45f66b8ef60c55c8fc3406e26faa80d11fb",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-input",
+      "path": "/Users/joel/.claude/skills/roblox-input/SKILL.md",
+      "sha256": "526c91fba4f5fe278f647f02ba17ff41a0a0f9c4fb228821448ba229991a2990",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-audio",
+      "path": "/Users/joel/.claude/skills/roblox-audio/SKILL.md",
+      "sha256": "03940921f4ac7dc19080d073923429b91aaf5864f0645d73785898695ed0c14e",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "luau-performance",
+      "path": "/Users/joel/.claude/skills/luau-performance/SKILL.md",
+      "sha256": "cd9f7d486ed89863809224f08b7112cdbd9556d0bc763c60aa4628f4ad6eea6f",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "roblox-creator-assets",
+      "path": "/Users/joel/.claude/skills/roblox-creator-assets/SKILL.md",
+      "sha256": "ae6944a1b9251059f7801c9c883ac3b41a8d7e011188ec096d9142bc38ff3e9a",
+      "read_at": "2026-10-18"
+    },
+    {
+      "name": "robloxification",
+      "path": "/Users/joel/.claude/skills/robloxification/SKILL.md",
+      "sha256": "6c5931d65f887a76a50844fa19801697487d0fc3944002569f41f5ccd17170ed",
+      "read_at": "2026-10-18"
+    }
+  ],
   "decisions": [
     "1 m = 3.5 studs",
-    "Layout/colliders/loot/spawners exported from the running web build (tools/export_map.mjs) -> tools/convert_map.py",
-    "Beaver custom rig from the web rig (tools/export_rigs.mjs), source clips on flat Motor6D rigs",
-    "Client-owned ball root with the web's kinematics; server-authoritative bullets, damage, loot"
+    "Player is the user's Roblox avatar (R15 + Animate); web clips retargeted by FK (tools/gen_roll.py)",
+    "Layout/colliders/loot/spawners exported from the running web build (tools/export_map.mjs -> tools/convert_map.py)",
+    "Server-authoritative inventory (InvOp ops), bullets, damage and loot; client LootView is a 1:1 port of InventoryUI at the 2560x1440 reference",
+    "Weapon icons are ViewportFrame renders of the Creator Store gun models (the pack ships no icons)",
+    "UI font FredokaOne per docs/art-brief.md (web M PLUS Rounded 1c is not built in)"
   ],
-  "evidence": [],
-  "known_limitations": [],
+  "evidence": [
+    {
+      "claim": "Two-client multiplayer: independent bags, shared-pile race has one winner without duplication, replication to both clients",
+      "artifact": "artifacts/roblox-director/mp-test-2026-10-18.json",
+      "method": "StudioTestService.ExecuteMultiplayerTestAsync(2) with temporary gated drivers using real remotes",
+      "date": "2026-10-18",
+      "limits": "server-side ordering only; no network latency simulation"
+    },
+    {
+      "claim": "LootView matches the web layout; slot label autoSize and name clipping fixed",
+      "artifact": "artifacts/screens/web_lootview_ref.png vs artifacts/screens/lootview_side_by_side_roblox.png",
+      "method": "same-viewport web (Playwright) and Studio captures",
+      "date": "2026-10-18",
+      "limits": "font family differs (art brief)"
+    },
+    {
+      "claim": "LootView drag, split, menu, double-click equip, hotbar rebinding, attachments, hover hotkeys work with real input",
+      "artifact": "docs/port-ledger.json (LootView, attachments entries); artifacts/screens/lootview_*.png",
+      "method": "user_mouse_input / user_keyboard_input in Studio Play",
+      "date": "2026-10-18",
+      "limits": "keyboard + mouse only"
+    },
+    {
+      "claim": "LootView warm rebuild 7-9 ms (was 13), cold ~26 ms",
+      "artifact": "docs/port-ledger.json (LootView rebuild cost)",
+      "method": "Studio-only os.clock per-section telemetry",
+      "date": "2026-10-18",
+      "limits": "backgrounded Studio on Apple Silicon; no low-end device measured"
+    },
+    {
+      "claim": "All 19 SFX load; no script errors at Play start",
+      "artifact": "SfxHolder attributes SfxChecked/SfxFailed",
+      "method": "Studio Play read-back",
+      "date": "2026-10-18",
+      "limits": "community audio ids, licensing open"
+    },
+    {
+      "claim": "Roll animation, blood/hit FX, muzzle, weapon hold, photo mode, controls verified",
+      "artifact": "docs/port-ledger.json verified list; artifacts/screens/",
+      "method": "real-input Studio runs and fixtures",
+      "date": "2026-10-18",
+      "limits": "see ledger notes"
+    }
+  ],
+  "known_limitations": [
+    "Touch and gamepad input not ported (the web build is keyboard + mouse only): user decision",
+    "Quest log / tracker / objective toasts and unlock notifications not ported (base-game systems; proposed session task_29b676e5)",
+    "Audio ids are Creator Store community uploads: replace with owned/licensed SFX before publishing",
+    "CreatorAssets (guns incl. RPG-7 and Recurve Bow, NPCs) exist only in the open place until the user saves",
+    "Performance not measured on a low-end/mobile device"
+  ],
   "next_actions": [
-    "Get screenshot access (Screen Recording or Studio MCP toggle)",
-    "Fog of war, melee, hotbar items, doors, construction sites, boss"
+    "User saves the place (Ctrl+S) to keep CreatorAssets",
+    "Decide touch/gamepad scope",
+    "Start the quest-log port session"
   ],
   "pending_jobs": [],
   "pending_work": [
     {
-      "task": "see docs/port-ledger.json open list",
+      "task": "Port the quest log, tracker and objective toasts",
+      "acceptance": "web-matched screenshots + real-input I key flow"
+    },
+    {
+      "task": "Remaining docs/port-ledger.json open entries",
       "acceptance": "matched web vs Roblox screenshots + real-input checks"
     }
   ],
@@ -49,5 +177,17 @@
     "co-op multiplayer in one server",
     "Roblox toy look per docs/art-brief.md"
   ],
-  "selected_skills": []
+  "selected_skills": [
+    "roblox-game-director",
+    "threejs-to-roblox-port",
+    "roblox-studio-playtest",
+    "roblox-studio-mcp",
+    "roblox-game-development",
+    "roblox-world-ui-design",
+    "roblox-input",
+    "roblox-audio",
+    "luau-performance",
+    "roblox-creator-assets",
+    "robloxification"
+  ]
 }
