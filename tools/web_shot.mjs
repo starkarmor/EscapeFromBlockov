@@ -4,7 +4,7 @@ import { chromium } from '@playwright/test';
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5188';
 const out = process.argv[2] ?? '/tmp/claude-501/web.png';
 const at = process.argv[3] ? [Number(process.argv[3]), Number(process.argv[4])] : null;
-const browser = await chromium.launch({ channel: 'chromium' });
+const browser = await chromium.launch({ executablePath: process.env.HOME + '/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing' });
 try {
   const page = await (await browser.newContext({ viewport: { width: 1684, height: 1080 } })).newPage();
   await page.goto(`${BASE}/`);

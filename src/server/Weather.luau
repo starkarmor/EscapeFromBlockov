@@ -135,6 +135,7 @@ Weather.hurt = nil :: ((Player, number) -> ())? -- Raid: storm damage (armor ign
 Weather.protection = nil :: ((Player) -> number)? -- Raid: worn storm protection
 Weather.posOf = nil :: ((Player) -> Vector3?)?
 local fired: { [string]: boolean } = {}
+Weather.listeners = {} :: { (string) -> () } -- more condition listeners (Loot: the Storm II cave box)
 local layers: { [Player]: { n: number, addT: number, last: number } } = {}
 
 --- the world clock starts from the first deploying player's profile (clock minutes, weather seed)
@@ -199,11 +200,15 @@ local function step(dt: number)
 			if Weather.onCondition then
 				Weather.onCondition(name)
 			end
+			for _, fn in Weather.listeners do
+				task.spawn(fn, name)
+			end
 		end
 	end
 	cond("night", Weather.night)
 	cond("rain", Weather.weather == "Rainy")
 	cond("storm", Weather.stage > 0)
+	cond("storm2", Weather.stage >= 2)
 	-- storm damage
 	if Weather.stage > 0 then
 		local st = STAGES[Weather.stage]

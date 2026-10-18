@@ -513,12 +513,25 @@ function Loot.start()
 	local n = 0
 	for _, it in INTERACTS do
 		if it.kind == "container" then
-			if math.random() <= (it.chance or 1) then
+			local function spawnBox()
 				local b: Box = { id = it.id, kind = "container", x = it.x, z = it.z, r = 1.9, label = "", hold = if it.container == "tech" then 0.6 else 0, table = it.table, container = it.container, rolled = false, items = {}, part = nil, data = nil }
 				boxes[b.id] = b
 				makeProp(b)
 				publish(b)
-				n += 1
+			end
+			if math.random() <= (it.chance or 1) then
+				if it.weather == "storm2" then
+					-- the cave's formula box exists only in Storm Phase II (weathers ["Stormy_II"])
+					local Weather = require(script.Parent.Weather)
+					table.insert(Weather.listeners, function(name)
+						if name == "storm2" then
+							spawnBox()
+						end
+					end)
+				else
+					spawnBox()
+					n += 1
+				end
 			end
 		elseif it.kind == "hatch" or it.kind == "teleport" or it.kind == "loader" then
 			local data = nil

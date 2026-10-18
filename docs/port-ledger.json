@@ -151,6 +151,11 @@
    "system": "AI load",
    "result": "32 active enemies ~0.5-1 ms per frame, 0 stuck, path queue max 2",
    "evidence": "AIDump stress run"
+  },
+  {
+   "system": "camera framing",
+   "result": "same spot side by side with the web build (bunker hatch): matching angle, distance, character size and prompt placement",
+   "evidence": "/tmp captures web_8282.png vs rbx_spawn"
   }
  ],
  "open": [
@@ -168,20 +173,12 @@
    "next": "replace with owned/licensed SFX before publishing"
   },
   {
-   "gap": "dodge roll i-frames vs explosions, piles from dropped items, Collect All (not rendered in the web either)",
-   "next": "later"
-  },
-  {
    "gap": "the tomb appears at the death spot in the same running server (the source shows it in a later raid; co-op adaptation)",
    "next": "confirm with the user"
   },
   {
    "gap": "Creator Store models live in the open place (ReplicatedStorage/CreatorAssets); not in Rojo",
    "next": "save the place; tools/import_assets.py rebuilds it"
-  },
-  {
-   "gap": "cave blueprint box gated to Storm Phase II (weather storm2) spawns every raid",
-   "next": "spawn it on the storm2 condition"
   },
   {
    "gap": "drone hacking (Takeover.ts) not ported",
