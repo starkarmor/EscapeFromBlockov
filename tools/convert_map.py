@@ -366,6 +366,10 @@ def lua(v, ind=0):
     return 'nil'
 md = {k: d.get(k) for k in ('id', 'name', 'bounds', 'spawn', 'randomSpawns', 'startSets', 'interacts', 'spawners', 'exits', 'exitCount', 'extractPads', 'doors', 'covers', 'regions', 'looseRows', 'looseSpots', 'player')}
 md['shelters'] = d.get('shelters', [])
+# DamageZone hazards (the campfires): every / damage / ignoreArmor, a sphere of diameter l at its height band
+md['hazards'] = [{'x': h['at'][0], 'z': h['at'][1], 'every': h['every'], 'damage': h['damage'], 'ignoreArmor': h.get('ignoreArmor', False),
+                  'r': (h['shapes'][0].get('l', 1) / 2) if h.get('shapes') else 0.7, 'y0': (h['shapes'][0].get('y') or [0, 1])[0] if h.get('shapes') else 0,
+                  'y1': (h['shapes'][0].get('y') or [0, 1])[1] if h.get('shapes') else 1} for h in sub.get('hazards', [])]
 WALL_FLAG = {'BreakableWall_2': 'wall', 'BreakableWall': 'wall2'}  # src/world/levels.ts:103 (BreakableWall_1 sits under the map: y < -2)
 md['walls'] = [{'name': b['name'], 'flag': WALL_FLAG[b['name']], 'x': b['at'][0], 'z': b['at'][1], 'yaw': b.get('yaw', 0), 'hp': b['hp'],
                 'size': (b.get('receiver') or {}).get('size'), 'body': (b.get('body') or {}).get('size')}

@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-17",
+ "updated": "2026-10-18",
  "source": "EscapeFromCanuckov web build (../src), Ground Zero main scene",
  "verified": [
   {
@@ -121,6 +121,36 @@
    "system": "level z-fighting",
    "result": "converter drops exact duplicate meshes and grows each piece by a hashed 0.0044-0.035 stud epsilon",
    "evidence": "Play screenshots of walls/caps at 3 spots"
+  },
+  {
+   "system": "weather / clock / storm",
+   "result": "Perlin weather ported bit for bit (seed checks Cloudy/Rainy/Sunny/Sunny at 08:00 match the web spec), storm stages, Distortion layers, tod factors, lighting, rain, tint, torch",
+   "evidence": "Play: DevClock jumps to night (drones spawned, 40 deg cone) and storm (stormlings, purple tint, Distortion x2, Storm Phase I label)"
+  },
+  {
+   "system": "grenades / cover / walls",
+   "result": "throw arc preview, lob, physics, fuse, flat blast with LOS, cover 88/88 bound, walls 2",
+   "evidence": "Play: grenade 75 damage on a giant (400 -> 325); explode fx log"
+  },
+  {
+   "system": "AI items",
+   "result": "calm heal (bandages) and operator grenade throw",
+   "evidence": "AIDump: scav hp 22 -> 37 with 3 bandages; operator atk=throw and a grenade in flight"
+  },
+  {
+   "system": "map screen / icons",
+   "result": "raycast map render with markers; 36 rasterized web silhouettes tinted per item",
+   "evidence": "Play screenshots"
+  },
+  {
+   "system": "cave sub-scene",
+   "result": "export + conversion, NavGrid, loot, teleports, lighting",
+   "evidence": "Play: enter at (252.1, -285.3), readable cave screenshot"
+  },
+  {
+   "system": "AI load",
+   "result": "32 active enemies ~0.5-1 ms per frame, 0 stuck, path queue max 2",
+   "evidence": "AIDump stress run"
   }
  ],
  "open": [
@@ -130,32 +160,8 @@
    "next": "Test tab > Clients and Servers > 2 players > Start; code is per-player server state"
   },
   {
-   "gap": "half cover hit points (72 covers), breakable walls (dynamite), throwables/grenades",
-   "next": "port Breakables cover HP and Grenades"
-  },
-  {
-   "gap": "unported enemies: giant, operator; bloater/stormling/drone need rain/storm/night",
-   "next": "weather + night spawns"
-  },
-  {
-   "gap": "weather (always Sunny), storm phase, rain",
-   "next": "WeatherManager port"
-  },
-  {
-   "gap": "cave sub-scene, Storm Zone / Warehouse loaders, notes, beacon, fishing, campfire hazards, merchant, quest board",
-   "next": "later slice items"
-  },
-  {
-   "gap": "minimap (M), weapon/item icons in HUD and web-style reticle with ammo pips",
-   "next": "UI pass"
-  },
-  {
-   "gap": "AI uses PathfindingService, not the decoded navmesh; no AI grenades, healing or inter-faction fights",
-   "next": "compare behaviour, port navmesh A* if needed"
-  },
-  {
-   "gap": "wolverine uses a procedural trot (its quad skeleton is not ported)",
-   "next": "port the quad rig clips"
+   "gap": "Storm Zone / Hidden Warehouse loaders (other maps), fishing (needs a rod: none drops in Ground Zero; the bunker supplies it), merchant, quest board, fireworks, sacrifice totems (CostTaker)",
+   "next": "base / next-map slices"
   },
   {
    "gap": "audio ids are Creator Store community uploads",
@@ -166,10 +172,6 @@
    "next": "later"
   },
   {
-   "gap": "item / weapon icons are names (the web has SVG icons)",
-   "next": "icon pass"
-  },
-  {
    "gap": "the tomb appears at the death spot in the same running server (the source shows it in a later raid; co-op adaptation)",
    "next": "confirm with the user"
   },
@@ -178,22 +180,12 @@
    "next": "save the place; tools/import_assets.py rebuilds it"
   },
   {
-   "gap": "vision dims only the ground (web: screen-space stencil also dims walls/props outside the fan)",
-   "cause": "no stencil in Roblox",
-   "next": "possible: per-part LocalTransparencyModifier tint or a ViewportFrame mask"
+   "gap": "cave blueprint box gated to Storm Phase II (weather storm2) spawns every raid",
+   "next": "spawn it on the storm2 condition"
   },
   {
-   "gap": "AI heals / grenades / skills / danger flee not ported (AI carry no consumables or throwables yet)",
-   "next": "port AI inventories (gz_presets) then startUse / throw"
-  },
-  {
-   "gap": "path search capped at 4 ms per frame (web: unbounded per frame)",
-   "cause": "Luau cost; latency can exceed one frame under load",
-   "next": "measure with 30+ active AI"
-  },
-  {
-   "gap": "AI-vs-AI damage factor aiCombat() and night perception factors not applied",
-   "next": "port aiCombat ratio and server-side night flag"
+   "gap": "drone hacking (Takeover.ts) not ported",
+   "next": "port with the takeover controls"
   }
  ]
 }

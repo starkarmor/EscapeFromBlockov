@@ -25,6 +25,7 @@ end
 require(script.Parent.Actions).start()
 require(script.Parent.Dress).start()
 require(script.Parent.Breakables).start()
+require(script.Parent.Hazards).start()
 do
 	local Grenades = require(script.Parent.Grenades)
 	Grenades.start()
