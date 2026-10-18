@@ -13,6 +13,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -518,7 +519,8 @@ local function display(slot: GuiObject, inst: InstV, src: string, inset: number)
 	nm.ClipsDescendants = true
 	new("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) }, nm)
 	new("UISizeConstraint", { MaxSize = Vector2.new(112, 19.5) }, nm)
-	label(nm, d.name or inst.id, 16, { Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, ZIndex = br.ZIndex + 1, TextTruncate = Enum.TextTruncate.AtEnd })
+	-- .nm: 16 px, white-space nowrap, overflow hidden: a long name is cut at the box edge ("Wooden Sti"), no ellipsis
+	label(nm, d.name or inst.id, 16, { Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, ZIndex = br.ZIndex + 1 })
 end
 
 -- every interactive cell: hover / press / right click (the drag and click logic lives in the input handlers below)
@@ -609,6 +611,36 @@ local function entry(parent: Instance, src: string, i: number, inst: InstV?, opt
 end
 
 --- SlotDisplay: the container (BG + the slot's faint icon) and the label under it
+-- one-line text widths at 100 px (TextService.GetTextBoundsAsync yields: measured once per text, then re-rendered)
+local widthAt100: { [string]: number } = {}
+local measuring: { [string]: boolean } = {}
+local function autoSize(text: string, w: number, min: number, max: number): number
+	local at100 = widthAt100[text]
+	if not at100 then
+		if not measuring[text] then
+			measuring[text] = true
+			task.spawn(function()
+				local params = Instance.new("GetTextBoundsParams")
+				params.Text = text
+				params.Font = FONT_B
+				params.Size = 100
+				params.Width = 1e5
+				local ok, b = pcall(TextService.GetTextBoundsAsync, TextService, params)
+				widthAt100[text] = if ok then (b :: Vector2).X else 0
+				if Inventory.open then
+					Inventory.render()
+				end
+			end)
+		end
+		return min
+	end
+	if at100 <= 0 then
+		return max
+	end
+	-- 3 px for the rounded font's side bearings, which the measured bounds leave out at small sizes
+	return math.max(min, math.min(max, math.floor((w - 3) / at100 * 100 * 10) / 10))
+end
+
 local function slotDisplay(parent: Instance, src: string, i: string, inst: InstV?, labelText: string, w: number, ch: number, lh: number, ghostId: string?)
 	local sd = frame(parent, UDim2.new(), UDim2.fromOffset(w, ch + 2 + lh))
 	local c = frame(sd, UDim2.new(), UDim2.fromOffset(w, ch), BLACK, 0.2, 16)
@@ -642,9 +674,9 @@ local function slotDisplay(parent: Instance, src: string, i: string, inst: InstV
 		local b = cellButton(c, ref, UDim2.new(), UDim2.fromScale(1, 1), true)
 		b.BackgroundTransparency = 1
 	end
-	label(sd, labelText, 20, { FontFace = FONT_B, TextColor3 = CREAM, Position = UDim2.fromOffset(0, ch + 2), Size = UDim2.fromOffset(w, lh),
-		TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true })
-	new("UITextSizeConstraint", { MinTextSize = 8, MaxTextSize = 20 }, sd:FindFirstChildOfClass("TextLabel") :: Instance)
+	-- InventoryUI.autoSize(label, w, 12, 20): one line, the largest size up to 20 that fits the width, never under 12
+	label(sd, labelText, autoSize(labelText, w, 12, 20), { FontFace = FONT_B, TextColor3 = CREAM, Position = UDim2.fromOffset(0, ch + 2),
+		Size = UDim2.fromOffset(w, lh), TextXAlignment = Enum.TextXAlignment.Center, ClipsDescendants = true })
 	passThrough(sd)
 	return sd
 end

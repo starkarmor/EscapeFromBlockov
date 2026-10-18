@@ -1,0 +1,65 @@
+{
+ "ok": true,
+ "res": {
+  "reports": {
+   "Player2": {
+    "otherEquip": "gun=tt33,gun2=,melee=stick,armor=,helmet=",
+    "boxCountSeen": 0,
+    "seesOther": true,
+    "lootPaneItems": 0,
+    "bag": "ammo_s_rusty:30,bandage:3,aspirin:2,carrot:1,cocoa:1",
+    "invEvents": 4
+   },
+   "Player1": {
+    "otherEquip": "gun=tt33,gun2=,melee=stick,armor=,helmet=",
+    "boxCountSeen": 0,
+    "seesOther": true,
+    "lootPaneItems": 0,
+    "bag": "ammo_s_rusty:30,bandage:3,aspirin:1,carrot:3,cocoa:1",
+    "invEvents": 4
+   }
+  },
+  "checks": [
+   {
+    "name": "distinct raid states",
+    "pass": true,
+    "detail": "Player1 / Player2"
+   },
+   {
+    "name": "give to A only",
+    "pass": true,
+    "detail": "A 1->3 B 1->1"
+   },
+   {
+    "name": "pile created",
+    "pass": true,
+    "detail": "c678007665"
+   },
+   {
+    "name": "one winner, no duplication",
+    "pass": true,
+    "detail": "aspirin before 2, after A 1 B 2, box count 0"
+   },
+   {
+    "name": "container emptied",
+    "pass": true,
+    "detail": "0"
+   },
+   {
+    "name": "both opened the same container",
+    "pass": true,
+    "detail": "true/true"
+   },
+   {
+    "name": "client report Player1",
+    "pass": true,
+    "detail": "{\"bag\":\"ammo_s_rusty:30,bandage:3,aspirin:1,carrot:3,cocoa:1\",\"boxCountSeen\":0,\"seesOther\":true,\"invEvents\":4,\"lootPaneItems\":0,\"otherEquip\":\"gun=tt33,gun2=,melee=stick,armor=,helmet=\"}"
+   },
+   {
+    "name": "client report Player2",
+    "pass": true,
+    "detail": "{\"bag\":\"ammo_s_rusty:30,bandage:3,aspirin:2,carrot:1,cocoa:1\",\"boxCountSeen\":0,\"seesOther\":true,\"invEvents\":4,\"lootPaneItems\":0,\"otherEquip\":\"gun=tt33,gun2=,melee=stick,armor=,helmet=\"}"
+   }
+  ]
+ }
+}
