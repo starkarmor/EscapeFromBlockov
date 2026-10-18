@@ -1,6 +1,6 @@
 {
  "updated": "2026-10-18",
- "source": "EscapeFromCanuckov web build (../src), Ground Zero main scene",
+ "source": "the web build (../src), Ground Zero main scene",
  "verified": [
   {
    "system": "spawn + camera",

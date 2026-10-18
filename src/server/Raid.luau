@@ -59,7 +59,7 @@ Raid.profiles = profiles
 
 local store: DataStore? = nil
 pcall(function()
-	store = DataStoreService:GetDataStore("Canuckov_Profiles_v1")
+	store = DataStoreService:GetDataStore("Blockov_Profiles_v1")
 end)
 
 local charFolder = Workspace:FindFirstChild("Characters") or Instance.new("Folder")

@@ -3,7 +3,7 @@
   "project_root": "/Users/joel/Desktop/Vibecoding/Games/EscapeFromBlockov/roblox",
   "revision": 4,
   "updated_at": "2026-10-18T18:59:23+00:00",
-  "objective": "Faithful 1:1 native Roblox port of the web game as Escape from Blockov (Ground Zero raid slice): the player is their own Roblox avatar, enemies are Creator Store models, never the Duckov/Canuckov names; full game feel, UI interactions and player feedback as in the web build; multiplayer in one server",
+  "objective": "Faithful 1:1 native Roblox port of the web game as Escape from Blockov (Ground Zero raid slice): the player is their own Roblox avatar, enemies are Creator Store models, never the reference game's or the web theme's names; full game feel, UI interactions and player feedback as in the web build; multiplayer in one server",
   "status": "working",
   "source_authority": {
     "rojo": "roblox/default.project.json",
@@ -14,7 +14,7 @@
     "status": "verified",
     "studio_id": "a2d6006d-2b3e-4a41-bdff-b9b1e1970530",
     "observed_at": "2026-10-18",
-    "place": "EscapeFromBlockov.rbxl (Studio title EscapeFromCanuckov)",
+    "place": "EscapeFromBlockov.rbxl (Studio still shows the older place title)",
     "version": "0.743.0.7431133"
   },
   "tool_access": {
@@ -27,7 +27,7 @@
     "Strip scripts from Creator Store assets",
     "Subagents use model sonnet, max 2",
     "Browser scripts only through tools/pw1.sh; never orphan browsers",
-    "No Duckov/Canuckov naming in the Roblox port; the beaver/goose theme is web-only"
+    "No reference-game or web-theme naming in the Roblox port; the web animal theme is web-only"
   ],
   "consulted_skills": [
     {

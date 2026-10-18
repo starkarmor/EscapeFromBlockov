@@ -9,7 +9,7 @@ Canonical visual brief for the native Roblox build. Other documents point here.
 | World layout, colliders, scale, spawns, loot, exits | Web build decoded data (`src/world/levels/ground_zero.json`) | 1:1 positions and sizes, meters -> studs at the fixed ratio below |
 | Gameplay, 3C, timings, values | Web build source (`src/entities`, `src/game`, `src/systems`, `src/game/gz/*.json`) | Game feel must match 1:1 |
 | Look (palette, materials, lighting, UI language, VFX) | This brief (robloxification grammar) | Deliberately distinct from the web build's dark muted render |
-| Characters | The player's own Roblox avatar (R15, native Animate); enemies are Creator Store R15 characters (`docs/creator-assets.json` "npcs") | No custom player rig; the Canuckov beaver/goose theme of the web build is not used on Roblox (decided 2026-10-17) |
+| Characters | The player's own Roblox avatar (R15, native Animate); enemies are Creator Store R15 characters (`docs/creator-assets.json` "npcs") | No custom player rig; the web build's animal theme is not used on Roblox (decided 2026-10-17) |
 
 The robloxification reference frames in the skill pack are not available locally (Git LFS pointers), so the
 palette below is the skill's documented starting swatches adapted to this map. All numbers are proposed
