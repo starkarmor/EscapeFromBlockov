@@ -985,6 +985,7 @@ local function enter(e: Enemy, state: string)
 	e.loopStep = 0
 	stopMove(e)
 	e.trigger = false
+	e.atk = "gate" -- a burst cut short by losing the foe does not carry over (it would block the patrol reload)
 	if state == "patrol" then
 		e.runInput = false
 		e.noticed = false
@@ -2269,10 +2270,17 @@ function Enemies.start()
 				local v = p:GetAttribute("DevSpawn")
 				local pp = Raid.posOf(p)
 				if typeof(v) == "string" and pp then
-					local kind, dx, dz = string.match(v, "^(%w+),([%-%d%.]+),([%-%d%.]+)")
+					local kind, dx, dz, item, hpPct = string.match(v, "^(%w+),([%-%d%.]+),([%-%d%.]+),?([%w_]*),?([%d%.]*)")
 					if kind then
 						local sx, sz = Nav.snap(pp.X + tonumber(dx) :: number, pp.Z + tonumber(dz) :: number)
-						spawnEnemy(kind, sx, sz, nil)
+						local e = spawnEnemy(kind, sx, sz, nil)
+						if item and item ~= "" then
+							e.items = { { id = item, n = 3 } }
+						end
+						if hpPct and hpPct ~= "" then
+							e.hp = e.maxHp * (tonumber(hpPct) :: number)
+							e.model:SetAttribute("HP", e.hp)
+						end
 					end
 				end
 			end)
@@ -2312,8 +2320,8 @@ function Enemies.start()
 				for _, e in enemies do
 					local d = nearestPlayer(e.pos)
 					if d < 60 then
-						table.insert(rows, string.format("%s%s#%d %s/%s d=%.1f hp=%d foe=%s task=%s path=%s ammo=%d obst=%s v=%.1f", if (stuckFor[e] or 0) >= 1.5 then "STUCK " else "", e.def.kind, e.id, e.fsm, e.atk, d, e.hp,
-							tostring(e.foe ~= nil), if e.task then string.format("%.1f,%.1f", e.task.target.X, e.task.target.Y) else "-", if e.path then tostring(#e.path) else "-", e.ammo, tostring(e.hasObstacle), e.vel.Magnitude))
+						table.insert(rows, string.format("%s%s#%d %s/%s d=%.1f hp=%d foe=%s task=%s path=%s ammo=%d obst=%s v=%.1f items=%d use=%s", if (stuckFor[e] or 0) >= 1.5 then "STUCK " else "", e.def.kind, e.id, e.fsm, e.atk, d, e.hp,
+							tostring(e.foe ~= nil), if e.task then string.format("%.1f,%.1f", e.task.target.X, e.task.target.Y) else "-", if e.path then tostring(#e.path) else "-", e.ammo, tostring(e.hasObstacle), e.vel.Magnitude, #e.items, tostring(e.useId)))
 					end
 				end
 				Workspace:SetAttribute("AIDump", table.concat(rows, "\n"))

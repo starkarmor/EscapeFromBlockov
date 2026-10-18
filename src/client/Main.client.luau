@@ -49,6 +49,7 @@ Combat.start()
 Interact.start()
 Results.start()
 Inventory.start()
+require(script.Parent.MapUI).start()
 
 ContextActionService:BindActionAtPriority("BlockovDodge", function(_, state)
 	if state == Enum.UserInputState.Begin then

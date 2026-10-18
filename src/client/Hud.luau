@@ -271,7 +271,8 @@ local function build()
 		local b = box(hb, Vector2.new(100, 100), INK, 0.749, 16)
 		b.LayoutOrder = i
 		local ringIn = new("UIStroke", { Thickness = 2, Color = WHITE, Transparency = 0.702, Enabled = false, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
-		local name = text(b, "", 18, { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.new(1, -12, 1, -24), Position = UDim2.fromOffset(6, 4), TextWrapped = true, TextScaled = true })
+		local name = text(b, "", 18, { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.new(1, -12, 1, -24), Position = UDim2.fromOffset(6, 4), TextWrapped = true, TextScaled = true, Visible = false })
+		local icon = new("ImageLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.46), Size = UDim2.fromOffset(72, 72), Visible = false }, b)
 		local ct = box(b, Vector2.new(0, 17.5), Color3.fromHex("#585f66"), 1, 999)
 		ct.AnchorPoint = Vector2.new(1, 1)
 		ct.Position = UDim2.fromScale(1, 1)
@@ -281,7 +282,7 @@ local function build()
 		local kc = keycap(b, tostring(i + 2))
 		kc.AnchorPoint = Vector2.new(0.5, 0)
 		kc.Position = UDim2.new(0.5, 0, 1, 8.8)
-		R.hot[i] = { frame = b, ringIn = ringIn, name = name, ct = ct, cts = cts }
+		R.hot[i] = { frame = b, ringIn = ringIn, name = name, icon = icon, ct = ct, cts = cts, iconId = "" }
 	end
 
 	-- ammo (BulletTypeHUD at centre - 86, bottom 168.9): grey type pill + T key, black count box "08 / 30"
@@ -777,6 +778,10 @@ function Hud.update(dt: number)
 		local id = hotbar[k]
 		local def = id and Guns.items[id]
 		hs.name.Text = if def then def.name else ""
+		if (id or "") ~= hs.iconId then
+			hs.iconId = id or ""
+			require(script.Parent.Icon).apply(hs.icon, id)
+		end
 		hs.ringIn.Enabled = def ~= nil
 		hs.frame.BackgroundTransparency = if def then 0.8 else 0.251
 		hs.ct.Visible = def ~= nil

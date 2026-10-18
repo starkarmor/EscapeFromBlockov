@@ -82,11 +82,22 @@ local function slot(parent: Instance, order: number, caption: string, id: string
 	t.TextXAlignment = Enum.TextXAlignment.Center
 	t.Size = UDim2.new(1, -8, 0.6, 0)
 	t.Position = UDim2.fromOffset(4, 4)
+	if def then
+		local icon = Instance.new("ImageLabel")
+		icon.BackgroundTransparency = 1
+		icon.AnchorPoint = Vector2.new(0.5, 0)
+		icon.Position = UDim2.new(0.5, 0, 0, 2)
+		icon.Size = UDim2.fromOffset(44, 44)
+		icon.Parent = b
+		require(script.Parent.Icon).apply(icon, id)
+		t.Size = UDim2.new(1, -8, 0, 16)
+		t.Position = UDim2.new(0, 4, 1, -20)
+	end
 	if def and n and n > 1 then
 		local c = text(b, "x" .. n, 14)
 		c.TextXAlignment = Enum.TextXAlignment.Right
-		c.Position = UDim2.new(0, 0, 1, -22)
-		c.Size = UDim2.new(1, -8, 0, 18)
+		c.Position = UDim2.new(0, 0, 0, 3)
+		c.Size = UDim2.new(1, -6, 0, 18)
 	elseif not def then
 		t.TextTransparency = 0.5
 	end

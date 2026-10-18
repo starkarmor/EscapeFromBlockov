@@ -296,8 +296,16 @@ local function render(items: { any })
 			name.TextWrapped = true
 			name.Text = it.name
 			name.TextColor3 = WHITE
-			name.Size = UDim2.new(1, -12, 1, -30)
-			name.Position = UDim2.fromOffset(6, 6)
+			name.Size = UDim2.new(1, -12, 0, 22)
+			name.Position = UDim2.new(0, 6, 1, -28)
+			local icon = Instance.new("ImageLabel")
+			icon.BackgroundTransparency = 1
+			icon.AnchorPoint = Vector2.new(0.5, 0)
+			icon.Position = UDim2.new(0.5, 0, 0, 4)
+			icon.Size = UDim2.new(0.62, 0, 0.62, 0)
+			icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+			icon.Parent = b
+			require(script.Parent.Icon).apply(icon, it.id)
 			stroke(name, 2, if q == 0 then INK else Hud.QCOL[q], if q == 0 then 0.3 else 0)
 			name.Parent = b
 			if (it.n or 1) > 1 then
