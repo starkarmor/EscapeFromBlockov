@@ -51,7 +51,7 @@ function Hazards.start()
 				end
 				local tp = t.pos()
 				if tp and (Vector2.new(tp.X, tp.Z) - Vector2.new(z.h.x, z.h.z)).Magnitude <= z.h.r + 0.3 then
-					task.spawn(t.hurt, z.h.damage, { direct = z.h.ignoreArmor, fromName = "Campfire", element = "fire" })
+					task.spawn(t.hurt, z.h.damage, { direct = z.h.ignoreArmor, fromName = "Campfire", element = "fire", hazard = true })
 				end
 			end
 		end

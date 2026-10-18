@@ -14,6 +14,7 @@ local Config = require(Shared.Config)
 local Units = require(Shared.Units)
 local Net = require(Shared.Net)
 local Items = require(Shared.gen.Items)
+local Inv = require(Shared.Inv)
 local MapData = require(Shared.MapData)
 local Raid = require(script.Parent.Raid)
 local Enemies = require(script.Parent.Enemies)
@@ -21,8 +22,9 @@ local Enemies = require(script.Parent.Enemies)
 local S = Units.S
 local Loot = {}
 
-type Item = { id: string, n: number, revealed: boolean, ammo: number? }
-type Box = { id: string, kind: string, x: number, z: number, r: number, label: string, hold: number, table: string?, container: string?, rolled: boolean, items: { Item }, part: BasePart?, data: any }
+-- a container's items are positional Insts (src/shared/Inv.luau) with `revealed`; `slots` is its capacity
+type Item = Inv.Inst
+type Box = { id: string, kind: string, x: number, z: number, r: number, label: string, hold: number, table: string?, container: string?, rolled: boolean, items: { Item }, part: BasePart?, data: any, slots: number? }
 -- the main map's interacts plus the cave sub-scene's (src/shared/CaveData.luau, ids prefixed cave_)
 local INTERACTS = table.clone(MapData.interacts)
 for _, it in require(Shared.CaveData).interacts do
@@ -136,6 +138,8 @@ local LOOK: { [string]: { size: Vector3, color: Color3 } } = {
 	daily = { size = Vector3.new(0.9, 0.7, 0.6), color = Color3.fromHex("#b8a07a") },
 	starter = { size = Vector3.new(0.9, 0.6, 0.6), color = Color3.fromHex("#8a9a5a") },
 	cardoor = { size = Vector3.new(1.2, 1.0, 0.15), color = Color3.fromHex("#5a6470") },
+	-- World.dropItem / makeContainer('pile'): a low box with a yellow beacon, hidden while empty
+	pile = { size = Vector3.new(0.9, 0.3, 0.9), color = Color3.fromHex("#6d6a52") },
 }
 local DEFAULT_LOOK = { size = Vector3.new(0.9, 0.6, 0.7), color = Color3.fromHex("#D0BA78") }
 
@@ -254,29 +258,71 @@ local function view(b: Box): { any }
 	return out
 end
 
-local function sendBox(p: Player, b: Box)
-	local r = Raid.raids[p]
+--- the container's display name (World.makeContainer: the type's name, Body, Lost Items, Dropped Items)
+function Loot.nameOf(b: Box): string
 	local t = b.container and Items.types[b.container]
-	local name = if b.label ~= "" then b.label elseif t and t.name then t.name else (b.container or b.kind)
-	if b.kind == "corpse" or b.kind == "body" then
-		name = b.label
+	if b.kind == "corpse" or b.kind == "body" or b.kind == "pile" then
+		return b.label
 	end
-	local row = (b.table and Items.tables[b.table]) or (b.container and Items.types[b.container])
-	Net.event("LootOpen"):FireClient(p, b.id, name, view(b), r and Loot.bagView(r.bag) or {}, (row and row.slots) or math.max(16, #b.items))
+	return if b.label ~= "" then b.label elseif t and t.name then t.name else (b.container or b.kind)
 end
 
-function Loot.bagView(bag: { any }): { any }
-	local out = {}
-	for i, s in bag do
-		local def = Items.items[s.id]
-		out[i] = { id = s.id, n = s.n, name = def and def.name or s.id, q = def and def.q or 0, color = def and def.color or "#888888" }
+--- the container's capacity (its table / type slots, 16 for bodies and piles)
+function Loot.slotsOf(b: Box): number
+	if b.slots then
+		return b.slots
 	end
-	return out
+	local row = (b.table and Items.tables[b.table]) or (b.container and Items.types[b.container])
+	b.slots = math.max((row and row.slots) or 16, #b.items)
+	return b.slots :: number
+end
+
+-- server/Inventory.luau listens: a player opened a container / its contents changed / it closed for them
+Loot.onOpen = nil :: ((Player) -> ())?
+Loot.onChange = nil :: ((Player) -> ())?
+Loot.onClose = nil :: ((Player) -> ())?
+
+--- the container a player has open (and whether an item is still being searched)
+function Loot.openOf(p: Player): (Box?, boolean)
+	local o = open[p]
+	if not o then
+		return nil, false
+	end
+	for _, it in o.box.items do
+		if not it.revealed then
+			return o.box, true
+		end
+	end
+	return o.box, false
+end
+
+--- after any change to a box's items: positions, beacons, the world attributes, every player looking into it
+function Loot.changed(b: Box)
+	Inv.layout(b.items)
+	if #b.items == 0 and b.data and b.data.beacon and b.kind ~= "pile" then
+		b.data.beacon:Destroy()
+		b.data.beacon = nil
+	end
+	if b.kind == "pile" and b.part then
+		for _, d in b.part:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.LocalTransparencyModifier = 0
+				d.Transparency = if #b.items > 0 then (if d.Name == "Beacon" then 0.3 else 0) else 1
+			end
+		end
+	end
+	publish(b)
+	for q, o in open do
+		if o.box == b and Loot.onChange then
+			Loot.onChange(q)
+		end
+	end
 end
 
 function Loot.addBox(kind: string, x: number, z: number, label: string, items: { Item }?, data: any, model: Model?): Box
 	local id = "c" .. tostring(math.random(1e9))
 	local b: Box = { id = id, kind = kind, x = x, z = z, r = 1.9, label = label, hold = 0, table = nil, container = kind, rolled = items ~= nil, items = items or {}, part = nil, data = data }
+	Inv.layout(b.items)
 	boxes[id] = b
 	local root = model and model:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if root then
@@ -296,9 +342,87 @@ local function openBox(p: Player, b: Box)
 		b.rolled = true
 		local row = (b.table and Items.tables[b.table]) or (b.container and Items.types[b.container])
 		b.items = if row then roll(row) else {}
+		Inv.layout(b.items)
 	end
+	Loot.slotsOf(b)
 	open[p] = { box = b, searchT = 0 }
-	sendBox(p, b)
+	if Loot.onOpen then
+		Loot.onOpen(p)
+	end
+end
+
+-- ------------------------------------------------------------------ loose items (World.spawnLoose / pick up)
+local function looseLabel(id: string, n: number): string
+	local d = Items.items[id]
+	return (if d then d.name else id) .. (if n > 1 then " x" .. n else "")
+end
+
+--- World: the loose item spawners [DB item-spawn], each Random.Range(draws) (upper bound exclusive) items at distinct
+--- points; a roll in the leftover probability spawns nothing; the stack is SPAWN_COUNT
+local function spawnLoose()
+	local n = 0
+	for _, sp in Items.loose or {} do
+		local pts = table.clone(sp.points)
+		local d0, d1 = sp.draws[1], sp.draws[2]
+		local draws = math.min(#pts, d0 + (if d1 > d0 then math.floor(math.random() * (d1 - d0)) else 0))
+		for _ = 1, draws do
+			local at = table.remove(pts, math.random(1, #pts))
+			local id = pick(sp.pool)
+			if id and Items.items[id] then
+				local count = spawnCount(id)
+				local b: Box = { id = "l" .. tostring(math.random(1e9)), kind = "loose", x = at[1], z = at[2], r = 1.4, label = looseLabel(id, count),
+					hold = 0, table = nil, container = nil, rolled = true, items = {}, part = nil, data = { id = id, n = count } }
+				-- LOOSE_GEO: a 0.42 x 0.18 x 0.3 box in the item's colour, 0.1 m up, a random yaw
+				local part = Instance.new("Part")
+				part.Name = "Loose"
+				part.Anchored = true
+				part.CanCollide = false
+				part.CanQuery = false
+				part.CanTouch = false
+				part.Size = Vector3.new(0.42, 0.18, 0.3) * S
+				part.Color = Color3.fromHex(Items.items[id].color or "#999999")
+				part.Material = Enum.Material.SmoothPlastic
+				part.CFrame = CFrame.new(at[1] * S, 0.1 * S, at[2] * S) * CFrame.Angles(0, math.random() * math.pi, 0)
+				part:SetAttribute("Loose", b.label)
+				part:SetAttribute("Box", b.id)
+				part.Parent = folder
+				b.part = part
+				boxes[b.id] = b
+				n += 1
+			end
+		end
+	end
+	return n
+end
+
+--- World.interact on a loose item: AddItem into the backpack; "Name xN" + the pickup sound for what went in, "Backpack
+--- full" when some stays on the ground
+local function pickUp(p: Player, b: Box)
+	local r = Raid.raids[p]
+	if not r then
+		return
+	end
+	local id, n = b.data.id, b.data.n
+	local left = Inv.addItem(r.bag, id, n, Raid.cap(r))
+	local got = n - left
+	if got > 0 then
+		Net.event("Toast"):FireClient(p, looseLabel(id, got), "obtained")
+	end
+	if left > 0 then
+		b.data.n = left
+		b.label = looseLabel(id, left)
+		if b.part then
+			b.part:SetAttribute("Loose", b.label)
+		end
+		Net.event("Toast"):FireClient(p, "Backpack full", "bad")
+	else
+		boxes[b.id] = nil
+		if b.part then
+			b.part:Destroy()
+		end
+	end
+	Raid.sendBag(p)
+	require(script.Parent.Weapons).syncAmmo(p)
 end
 
 local function interact(p: Player, id: any)
@@ -314,6 +438,12 @@ local function interact(p: Player, id: any)
 	if (Vector2.new(pos.X, pos.Z) - Vector2.new(b.x, b.z)).Magnitude > b.r + 1.2 then
 		return
 	end
+	-- World.startDoor: a locked door without its key refuses before the hold starts ("Requires <Key>")
+	if b.kind == "door" and b.data and b.data.key and not b.data.unlocked and Raid.count(r.bag, b.data.key) <= 0 then
+		local def = Items.items[b.data.key]
+		Net.event("Toast"):FireClient(p, "Requires " .. (def and def.name or "Key"), "bad")
+		return
+	end
 	if b.hold > 0 then
 		holds[p] = { box = b, t = 0 }
 		p:SetAttribute("HoldId", b.id)
@@ -321,7 +451,9 @@ local function interact(p: Player, id: any)
 		p:SetAttribute("HoldStart", Workspace:GetServerTimeNow())
 		return
 	end
-	if b.kind == "container" or b.kind == "corpse" or b.kind == "body" then
+	if b.kind == "loose" then
+		pickUp(p, b)
+	elseif b.kind == "container" or b.kind == "corpse" or b.kind == "body" or b.kind == "pile" then
 		openBox(p, b)
 	else
 		Loot.finish(p, b)
@@ -338,10 +470,12 @@ local function doorToggle(p: Player, b: Box)
 	if d.key and not d.unlocked then
 		if not r or Raid.count(r.bag, d.key) <= 0 then
 			local def = Items.items[d.key]
-			Net.event("Toast"):FireClient(p, "Locked: needs " .. (def and def.name or d.key), "bad")
+			-- missing key: PopText, the interaction does not start
+			Net.event("Toast"):FireClient(p, "Requires " .. (def and def.name or "Key"), "bad")
 			return
 		end
 		d.unlocked = true
+		Net.event("Toast"):FireClient(p, "Door unlocked", "good")
 		if d.keyUse == "finish" then
 			Raid.take(r.bag, d.key, 1)
 			Raid.sendBag(p)
@@ -422,6 +556,8 @@ function Loot.finish(p: Player, b: Box)
 		if t then
 			Net.event("Note"):FireClient(p, t[1], t[2])
 		end
+		-- World: reading a note records it ("Note added")
+		Net.event("Toast"):FireClient(p, "Note added", "info")
 	elseif b.kind == "beacon" then
 		local flag = b.data.flag or "beacon"
 		flags[flag] = true
@@ -441,38 +577,15 @@ function Loot.finish(p: Player, b: Box)
 	end
 end
 
-local function take(p: Player, boxId: any, index: any)
-	local o = open[p]
-	local r = Raid.raids[p]
-	if not o or not r or typeof(index) ~= "number" or o.box.id ~= boxId then
-		return
-	end
-	local it = o.box.items[index]
-	if not it or not it.revealed then
-		return
-	end
-	table.remove(o.box.items, index)
-	if #o.box.items == 0 and o.box.data and o.box.data.beacon then
-		o.box.data.beacon:Destroy()
-	end
-	local def = Items.items[it.id]
-	if def and def.fire and not r.gun then
-		r.gun = { id = it.id, ammo = it.ammo or 0, dur = 100 }
-	else
-		Raid.addItem(r.bag, it.id, it.n)
-	end
-	publish(o.box)
-	require(script.Parent.Weapons).syncAmmo(p)
-	sendBox(p, o.box)
-end
-
 local function step(dt: number)
 	for p, o in open do
 		local r = Raid.raids[p]
 		local pos = Raid.posOf(p)
 		if not r or not r.alive or not pos or (Vector2.new(pos.X, pos.Z) - Vector2.new(o.box.x, o.box.z)).Magnitude > Config.Loot.closeDistance then
 			open[p] = nil
-			Net.event("LootOpen"):FireClient(p, nil)
+			if Loot.onClose then
+				Loot.onClose(p)
+			end
 			continue
 		end
 		-- reveal the next hidden item after its quality's inspect time
@@ -484,8 +597,7 @@ local function step(dt: number)
 				if o.searchT >= Config.Loot.inspect[q + 1] then
 					o.searchT = 0
 					it.revealed = true
-					publish(o.box)
-					sendBox(p, o.box)
+					Loot.changed(o.box)
 				end
 				break
 			end
@@ -688,12 +800,15 @@ function Loot.start()
 			column(it.x, it.z, 1.2, 3.5, "BUNKER")
 		end
 	end
-	print(string.format("[Blockov] %d containers this raid", n))
+	print(string.format("[Blockov] %d containers, %d loose items this raid", n, spawnLoose()))
 	-- the dead player's body: "Lost Items", everything pre-revealed (the tomb), a cyan beacon over it
 	Raid.onCorpse(function(pos, name, items, model)
 		local list = {}
 		for _, st in items do
-			table.insert(list, { id = st.id, n = st.n, revealed = true })
+			local c = table.clone(st)
+			c.pos = nil
+			c.revealed = true
+			table.insert(list, c)
 		end
 		local b = Loot.addBox("corpse", pos.X, pos.Z, "Lost Items", list, nil, model)
 		local beacon = Instance.new("Part")
@@ -752,14 +867,54 @@ function Loot.start()
 		p:SetAttribute("HoldId", nil)
 		if open[p] then
 			open[p] = nil
+			if Loot.onClose then
+				Loot.onClose(p)
+			end
 		end
 	end)
-	Net.event("LootTake").OnServerEvent:Connect(take)
 	RunService.Heartbeat:Connect(step)
 	Players.PlayerRemoving:Connect(function(p)
 		open[p] = nil
 		holds[p] = nil
 	end)
+end
+
+--- World.dropItem: into a pile within 1.5 m of (x, z), else a new one ("Dropped Items", searched)
+function Loot.dropPile(x: number, z: number, inst: Item)
+	local pile: Box? = nil
+	for _, b in boxes do
+		if b.kind == "pile" and (Vector2.new(b.x, b.z) - Vector2.new(x, z)).Magnitude < 1.5 then
+			pile = b
+			break
+		end
+	end
+	if not pile then
+		local nb = Loot.addBox("pile", x, z, "Dropped Items", {}, nil, nil)
+		nb.slots = 16
+		local beacon = Instance.new("Part")
+		beacon.Name = "Beacon"
+		beacon.Anchored = true
+		beacon.CanCollide = false
+		beacon.CanQuery = false
+		beacon.CastShadow = false
+		beacon.Material = Enum.Material.Neon
+		beacon.Color = Color3.fromHex("#ffd23f")
+		beacon.Transparency = 0.3
+		beacon.Size = Vector3.new(0.12, 2.4, 0.12) * S
+		beacon.CFrame = CFrame.new(x * S, 1.2 * S, z * S)
+		beacon.Parent = nb.part
+		nb.data = { beacon = beacon }
+		pile = nb
+	end
+	local b = pile :: Box
+	local c = table.clone(inst)
+	c.pos = nil
+	c.revealed = true
+	-- takes the pile's first empty position (past its capacity it still goes in)
+	if not Inv.addFirstEmpty(b.items, c, Loot.slotsOf(b)) then
+		table.insert(b.items, c)
+	end
+	Loot.changed(b)
 end
 
 --- interact points the client can use (id, kind, label, x, z, r, hold)

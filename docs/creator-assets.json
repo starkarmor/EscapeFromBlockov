@@ -231,5 +231,30 @@
   "role": "held gun models per weapon (tools/import_gunpack.py)",
   "note": "2 scripts (Material / PoseTexture pattern) stripped before use"
  },
- "gunFlip": {}
+ "gunFlip": {},
+ "gunExtra": [
+  {
+   "id": "16630906452",
+   "name": "RPG-7",
+   "creator": "Regole_CKC",
+   "for": [
+    "rpg7"
+   ],
+   "axis": "long",
+   "flip": false,
+   "note": "8 meshes, no scripts"
+  },
+  {
+   "id": "156860335",
+   "name": "Recurve Bow",
+   "creator": "TakeTheTaco",
+   "for": [
+    "bow"
+   ],
+   "axis": "depth",
+   "flip": false,
+   "upright": true,
+   "note": "2 parts, 2 scripts stripped"
+  }
+ ]
 }

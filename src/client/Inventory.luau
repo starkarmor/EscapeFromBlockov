@@ -1017,12 +1017,16 @@ function Inventory.render()
 	table.clear(cells)
 	if view then
 		Icon.recycle(view)
-		view:Destroy()
+		-- out of the tree now, destroyed after this frame: the teardown is not paid on the rebuild's frame
+		local old = view
+		old.Parent = nil
+		task.defer(old.Destroy, old)
 	end
 	rendering = false
 	table.clear(spinners)
 	local w = W()
-	view = frame(root, UDim2.new(), UDim2.fromOffset(w, 1440))
+	-- built detached and parented once: inserting ~500 instances into the live tree re-runs its layouts per insert
+	view = frame(nil :: any, UDim2.new(), UDim2.fromOffset(w, 1440))
 	view.Name = "View"
 	-- CloseViewOnPointerClick: a click on the empty view area clears the selection, then closes the view
 	local bg = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, view)
@@ -1037,12 +1041,25 @@ function Inventory.render()
 			Inventory.toggle(false)
 		end
 	end)
+	local parts = {}
+	local function mark(name: string)
+		table.insert(parts, string.format("%s=%.1f", name, (os.clock() - t0) * 1000))
+	end
+	mark("clear")
 	renderChrome(view, w)
+	mark("chrome")
 	renderHotbarEditor(view, w)
+	mark("hotbar")
 	renderLeft(view)
+	mark("left")
 	renderRight(view, w)
+	mark("right")
 	renderDetails(view, w)
+	mark("details")
+	view.Parent = root
+	mark("parent")
 	Inventory.renderTip()
+	mark("tip")
 	-- Studio telemetry for the performance check: the rebuild's script time and its viewport count
 	if RunService:IsStudio() then
 		local vps = 0
@@ -1053,6 +1070,7 @@ function Inventory.render()
 		end
 		player:SetAttribute("InvRenderMs", math.floor((os.clock() - t0) * 10000 + 0.5) / 10)
 		player:SetAttribute("InvViewports", vps)
+		player:SetAttribute("InvRenderParts", table.concat(parts, " "))
 	end
 end
 

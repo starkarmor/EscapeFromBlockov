@@ -10,7 +10,7 @@ Raid.start()
 Weather.start()
 Weather.posOf = Raid.posOf
 Weather.hurt = function(p, dmg)
-	Raid.hurt(p, dmg, { direct = true, fromName = "Storm", weaponId = "storm" })
+	Raid.hurt(p, dmg, { direct = true, fromName = "Storm", weaponId = "storm", tick = true })
 end
 Weather.protection = Raid.stormProtection
 local okE, Enemies = pcall(require, script.Parent:FindFirstChild("Enemies"))
@@ -23,6 +23,7 @@ if okL and Loot then
 	Loot.start()
 end
 require(script.Parent.Actions).start()
+require(script.Parent.Inventory).start()
 require(script.Parent.Dress).start()
 require(script.Parent.Breakables).start()
 require(script.Parent.Hazards).start()

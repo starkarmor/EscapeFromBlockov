@@ -37,6 +37,7 @@ PC.slot = 1 -- 1 / 2 firearms, 3 melee (the HUD highlight)
 PC.blocked = false -- a UI panel owns input (loot window or inventory)
 PC.lootOpen = false
 PC.invOpen = false
+PC.photoOpen = false
 PC.resultOpen = false
 PC.mapOpen = false
 PC.noteOpen = false
@@ -96,7 +97,7 @@ function PC.update(dt: number, cursor: Vector2)
 		return
 	end
 	clock += dt
-	PC.blocked = PC.lootOpen or PC.invOpen or PC.resultOpen or PC.mapOpen or PC.noteOpen
+	PC.blocked = PC.lootOpen or PC.invOpen or PC.resultOpen or PC.mapOpen or PC.noteOpen or PC.photoOpen
 	PC.meleeAnim = math.max(0, PC.meleeAnim - dt * 5)
 	local p = r.Position
 	PC.pos = Vector2.new(p.X / S, p.Z / S)
@@ -275,6 +276,7 @@ function PC.animState(): any
 		aiming = PC.held == "gun" and PC.meleeAnim <= 0,
 		melee = if PC.meleeAnim > 0 then math.max(1e-3, 1 - PC.meleeAnim) else 0,
 		dodge = if PC.dodgeT > 0 then math.max(1e-3, PC.dodgeT / D.time) else 0,
+		sprint = PC.sprinting,
 	}
 end
 

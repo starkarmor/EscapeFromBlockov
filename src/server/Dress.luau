@@ -201,18 +201,7 @@ end
 -- Creator Store model (CreatorAssets/Guns, tools/import_gunpack.py) welded to the right hand's grip attachment; IKControls
 -- put that hand on the socket and the left hand on the foregrip (long guns) or under the grip (pistols), so the body
 -- that is drawn holds the gun where the bullets leave it.
-local PACK: { [string]: string } = {
-	pm = "Makarova", tt33 = "Bloxxing Hi-Power", g17 = "Geist 17", deagle = "AceShot .45",
-	ak47 = "Kalash-200", ak103 = "KPFD-408", ak74u = "Kalash-200", rpk = "Kalash-200", adar = "E22",
-	m4a1 = "Klobb M4-A1 TACTICAL", mcx_spear = "Forge Tac SCAR L", mk47 = "Forge Tac SCAR H", ash12 = "Forge Tac SCAR H",
-	mdr556 = "C8-Tactical", mdr762 = "Bernadetta LK-160", aug_a1 = "Klobb XR177", aug_a3 = "Klobb XR177",
-	m14 = "FAL", m1a = "Klobb M-16-A1", sks = "FAL", vpo101 = "Bernadetta LK-160", vpo136 = "Klobb M-16-A1",
-	asval = "Bernadetta KPX", sr3m = "Bernadetta KPX", vss = "Forge Tac Inception", bizon = "Bernadetta KPX", ppsh = "Bernadetta KPX",
-	mp5 = "Charlie and Satina MP-5", mp7 = "Charlie & Satina MP-7", ump45 = "Charlie and Satina UMP-45 LW", uzi = "Uzi", vector = "Tecci",
-	m700 = "RC BALLISTA", sv98 = "AWPer", mosin = "Bloxchester 1894", toz106 = "Bloxchester 1894", m107 = "M-82",
-	rpd = "U-100 MK II", mmg = "M-60", shotgun_homemade = "1887", toz66 = "1887", mp155 = "M1014",
-	egun_storm = "E22", egun_spider = "U-100 MK II",
-}
+local PACK: { [string]: string } = require(ReplicatedStorage:WaitForChild("Shared").GunModels)
 -- where the right hand grips, as a fraction of the gun's length from its rear (stocks reach back past the hand)
 local function gripFraction(id: string): (number, boolean)
 	local it = Guns.items[id]
@@ -269,6 +258,8 @@ local function restFromRoot(part: BasePart, root: BasePart): CFrame
 	return cf
 end
 
+local BOW_HEIGHT = 0.85
+
 local function holdGun(char: Model, gunId: string): boolean
 	local guns = assets and assets:FindFirstChild("Guns")
 	local tpl = guns and PACK[gunId] and guns:FindFirstChild(PACK[gunId]) :: Model?
@@ -294,7 +285,14 @@ local function holdGun(char: Model, gunId: string): boolean
 	local gun = tpl:Clone()
 	gun.Name = "HeldGun"
 	local size0 = gun:GetAttribute("Size0") :: Vector3
-	gun:ScaleTo(L * S / size0.X)
+	-- a bow (Upright) is held by the middle of its riser in one hand, limbs vertical, 0.85 m tall
+	local upright = gun:GetAttribute("Upright") == true
+	if upright then
+		pistol = true
+		gun:ScaleTo(BOW_HEIGHT * S / size0.Y)
+	else
+		gun:ScaleTo(L * S / size0.X)
+	end
 	local _, size = gun:GetBoundingBox()
 	-- the grip socket in the root's frame (root faces -Z; the feet are rootHeight below its centre). Pistols: the web's
 	-- one-handed socket exactly; long guns sit 0.12 m further in so the left hand reaches the foregrip.
@@ -305,7 +303,8 @@ local function holdGun(char: Model, gunId: string): boolean
 	end
 	local socket = CFrame.new(h.X * S, h.Y * S - rootH, -h.Z * S) -- agent frame: -Z forward, +Y up
 	-- the model in the agent frame: its +X (muzzle) onto -Z, the muzzle at (0, up, -reach)
-	local modelInAgent = CFrame.new(0, up * S - size.Y * 0.25, -(reach * S - size.X / 2)) * CFrame.Angles(0, math.pi / 2, 0)
+	local modelInAgent = if upright then CFrame.new(0, up * S, 0) * CFrame.Angles(0, math.pi / 2, 0)
+		else CFrame.new(0, up * S - size.Y * 0.25, -(reach * S - size.X / 2)) * CFrame.Angles(0, math.pi / 2, 0)
 	local torsoRest = restFromRoot(torso, root)
 	local rootPart = gun.PrimaryPart :: BasePart
 	gun:PivotTo(root.CFrame * socket * modelInAgent)

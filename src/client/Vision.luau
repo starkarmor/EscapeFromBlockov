@@ -21,7 +21,7 @@ local params = RaycastParams.new()
 params.CollisionGroup = "QSight"
 params.FilterType = Enum.RaycastFilterType.Exclude
 
-type Tag = { gui: Frame, fill: Frame, lag: Frame, blink: Frame, pop: UIScale, bubble: TextLabel, root: BasePart, shown: boolean?, hp: number, lagF: number, lagHold: number, blinkT: number, popT: number, alertT: number }
+type Tag = { gui: Frame, fill: Frame, lag: Frame, blink: Frame, pop: UIScale, bubble: TextLabel, root: BasePart, shown: boolean?, hp: number, lagF: number, lagHold: number, blinkT: number, popT: number, alertT: number, name: TextLabel, bar: Frame, stepT: number }
 local tags: { [Model]: Tag } = {}
 -- WorldUI nameplates: name 20 over a 109x20 bar (dark .718; white lag; fill #FFE3C6, glow #FF4545); a hit blinks the bar
 -- #FF5D5D for 0.1 s and pops it to 1.5x (0.25 s), the lag trails 0.35 s; "!" bubble for 1.6 s on entering combat
@@ -121,7 +121,7 @@ local function tagFor(m: Model): Tag?
 	bc.Parent = bubble
 	bubble.Parent = bb
 	bb.Parent = plateRoot
-	t = { gui = bb, fill = fill, lag = lag, blink = blink, pop = pop, bubble = bubble :: any, root = root, hp = 1, lagF = 1, lagHold = 0, blinkT = 99, popT = 99, alertT = 99 }
+	t = { gui = bb, fill = fill, lag = lag, blink = blink, pop = pop, bubble = bubble :: any, root = root, hp = 1, lagF = 1, lagHold = 0, blinkT = 99, popT = 99, alertT = 99, name = name, bar = bar, stepT = 0 }
 	tags[m] = t
 	-- speech bubbles (Enemy.say): "!" on combat entry, "?" on alert, "Reloading!" from the second empty reload
 	m:GetAttributeChangedSignal("AlertAt"):Connect(function()
@@ -171,15 +171,94 @@ local function viewNow(): (number, number, number)
 	local fa = Workspace:GetAttribute("TodAngle")
 	local fd = Workspace:GetAttribute("TodDist")
 	local fs = Workspace:GetAttribute("TodSense")
-	local a = V.angle * (if typeof(fa) == "number" then fa else 1)
-	local bubble = V.bubble * (if typeof(fs) == "number" then fs else 1)
-	local dist = math.max(V.dist * (if typeof(fd) == "number" then fd else 1), bubble - 2.5)
+	-- the night-vision ability t lifts each factor toward 1 (World.updateVision: lerp(f, 1, t))
+	local nvt = player:GetAttribute("NightVision")
+	local t = math.clamp(if typeof(nvt) == "number" then nvt else 0, 0, 1)
+	local function lift(f: any): number
+		local v = if typeof(f) == "number" then f else 1
+		return v + (1 - v) * t
+	end
+	local a = V.angle * lift(fa)
+	local bubble = V.bubble * lift(fs)
+	local dist = math.max(V.dist * lift(fd), bubble - 2.5)
 	return a, dist, bubble
 end
 local function night(): boolean
 	return Workspace:GetAttribute("Night") == true
 end
 local _ = night
+
+-- WorldUI: an alerted enemy's "!" stays 1.6 s even unseen (.ghost: the bubble alone), clamped to the screen edge when off
+-- screen (.edge); the player's own bar (.plate.me, no name) rides 2.4 m over the character
+Vision.onStep = nil :: ((Vector3) -> ())?
+local function placeGhost(t: Tag, worldPos: Vector3)
+	local cam = Workspace.CurrentCamera
+	local vp = cam.ViewportSize
+	local sp, inView = cam:WorldToViewportPoint(worldPos)
+	local x, y = sp.X, sp.Y
+	local off = not inView or x < 0 or x > vp.X or y < 0 or y > vp.Y
+	if sp.Z < 0 then
+		-- behind the camera: mirror so the clamp lands on the right edge
+		x, y = vp.X - x, vp.Y - y
+	end
+	if off then
+		x = math.clamp(x, 24, vp.X - 24)
+		y = math.clamp(y, 34, vp.Y - 24)
+	end
+	t.gui.Position = UDim2.fromOffset(x / U, y / U)
+	t.name.Visible = false
+	t.bar.Visible = false
+	t.bubble.Position = UDim2.fromOffset(0, 19)
+	t.gui.Visible = true
+end
+
+local function placeNormal(t: Tag)
+	t.name.Visible = true
+	t.bar.Visible = true
+	t.bubble.Position = UDim2.fromOffset(0, -56)
+end
+
+local meTag: Tag? = nil
+local function updateMe()
+	local char = player.Character
+	local alive = player:GetAttribute("Alive") == true
+	if not char or not alive or PC.invOpen then
+		if meTag then
+			meTag.gui.Visible = false
+		end
+		return
+	end
+	if not meTag or meTag.root.Parent ~= char then
+		if meTag then
+			meTag.gui:Destroy()
+			for m, t in tags do
+				if t == meTag then
+					tags[m] = nil
+				end
+			end
+		end
+		meTag = tagFor(char)
+		if not meTag then
+			return
+		end
+		meTag.name.Visible = false
+	end
+	local t = meTag :: Tag
+	local hp, max = player:GetAttribute("HP"), player:GetAttribute("MaxHP")
+	if typeof(hp) == "number" and typeof(max) == "number" then
+		local f = math.clamp(hp / max, 0, 1)
+		if f < t.hp - 1e-4 then
+			t.blinkT, t.popT, t.lagHold = 0, 0, 0.35
+		end
+		t.hp = f
+		t.fill.Size = UDim2.fromOffset(97 * f, 8)
+		t.fill.BackgroundColor3 = Color3.fromRGB(255, 132, 119):Lerp(Color3.fromRGB(255, 227, 198), f)
+	end
+	local sp, inView = Workspace.CurrentCamera:WorldToViewportPoint(Vector3.new(t.root.Position.X, 2.4 * S, t.root.Position.Z))
+	t.gui.Position = UDim2.fromOffset(sp.X / U, sp.Y / U)
+	t.gui.Visible = inView
+	t.name.Visible = false
+end
 
 local lastT = os.clock()
 function Vision.update()
@@ -243,6 +322,30 @@ function Vision.update()
 		setVisible(m, vis)
 		local t = tags[m]
 		if t then
+			if not vis and t.alertT < 1.6 and t.bubble.Text == "!" and not m:GetAttribute("Dead") then
+				placeGhost(t, root.Position + Vector3.new(0, 1.35 * S, 0))
+			else
+				placeNormal(t)
+			end
+			-- World: an unseen enemy's footstep within hearing (9 m x (1 + hearing x 1.5)) shows as a step ping; the walk
+			-- cycle bands (0.5 / 1 / 2 m/s -> 1.25 / 0.714 / 0.476 s per cycle, two steps)
+			local v = root.AssemblyLinearVelocity
+			local sp = Vector2.new(v.X, v.Z).Magnitude / S
+			if not vis and sp > 0.5 and not m:GetAttribute("Dead") then
+				t.stepT -= dt
+				if t.stepT <= 0 then
+					t.stepT = (if sp >= 2 then 0.476 elseif sp >= 1 then 0.714 else 1.25) / 2
+					local hearing = player:GetAttribute("Hearing")
+					local hearR = 9 * (1 + (if typeof(hearing) == "number" then hearing else 0) * 1.5)
+					if len < hearR and Vision.onStep then
+						Vision.onStep(Vector3.new(p.X + (math.random() - 0.5), 0.6, p.Y + (math.random() - 0.5)))
+					end
+				end
+			else
+				t.stepT = 0
+			end
+		end
+		if t then
 			local hp, max = m:GetAttribute("HP"), m:GetAttribute("MaxHP")
 			if typeof(hp) == "number" and typeof(max) == "number" then
 				local f = math.clamp(hp / max, 0, 1)
@@ -261,6 +364,7 @@ function Vision.update()
 			tags[m] = nil
 		end
 	end
+	updateMe()
 end
 
 -- ------------------------------------------------------------------ vision fan (VisionFan.ts): 120 rays from the

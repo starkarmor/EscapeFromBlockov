@@ -11,6 +11,18 @@ function Guns.row(id: string): any
 	return Guns.feel[id]
 end
 
+--- the held gun's stats with its fitted parts (the "GunAtt" attribute "Slot=part,..."; Inv.gunFeel)
+function Guns.rowWith(id: string, att: string?): any
+	if not att or att == "" then
+		return Guns.feel[id]
+	end
+	local map = {}
+	for k, v in string.gmatch(att, "(%w+)=([^,]+)") do
+		map[k] = v
+	end
+	return require(script.Parent.Inv).gunFeel({ id = id, att = map })
+end
+
 --- data.ts scatterNow: degrees (full cone width)
 function Guns.scatterNow(g: any, ads: number): (number, number, number, number)
 	local t = math.clamp(ads, 0, 1)
@@ -46,6 +58,48 @@ function Guns.ammoOf(id: string): string?
 	return it and it.fire and it.fire.ammo
 end
 
+--- data.ts ammoTypesFor: every ammo item of the gun's caliber (sorted by id for a stable order)
+local typesCache: { [string]: { string } } = {}
+function Guns.ammoTypesFor(gunId: string): { string }
+	local it = Guns.items[gunId]
+	local cal = it and it.fire and it.fire.caliber
+	if not cal then
+		return {}
+	end
+	if typesCache[cal] then
+		return typesCache[cal]
+	end
+	local out = {}
+	for id, d in Guns.items do
+		if d.ammo and d.ammo.caliber == cal then
+			table.insert(out, id)
+		end
+	end
+	table.sort(out)
+	typesCache[cal] = out
+	return out
+end
+
+--- Player.loadedType: the rounds in the magazine (loaded, else the selected type, else the gun's default)
+function Guns.loadedType(g: any): string?
+	return g.loaded or g.sel or Guns.ammoOf(g.id)
+end
+
+--- Player.ammoTypeFor: the type the next reload loads: the selected / loaded / default type when carried, else the
+--- first carried type of the caliber, else the wanted one (count = a function counting an ammo id in the backpack)
+function Guns.ammoTypeFor(g: any, count: (string) -> number): string?
+	local want = g.sel or g.loaded or Guns.ammoOf(g.id)
+	if want and count(want) > 0 then
+		return want
+	end
+	for _, id in Guns.ammoTypesFor(g.id) do
+		if count(id) > 0 then
+			return id
+		end
+	end
+	return want
+end
+
 -- body.ts KIND_MODEL: the right-hand socket per kind (gz_holdpose models, model space x right, y up, z forward)
 local KIND_MODEL = { player = "player", scrapper = "human", scav = "human", brute = "human", contractor = "human", boss = "boss",
 	bloater = "bloater", drone = "drone", stormling = "stormling", wolf = "wolf", giant = "human", operator = "human" }
@@ -63,6 +117,9 @@ end
 
 --- body.ts muzzleWorld: the hand socket follows the body yaw `facing`, the muzzle offset turns with the aim yaw.
 --- Without a decoded muzzle: 0.8 m ahead of the shooter at the hand height (Player.ts MUZZLE fallback).
+--- Handedness: the web build keeps the source's left-handed (Unity) coordinates in a right-handed world, so its "right"
+--- hand (+x while facing +z) is anatomically the left one. The avatars here hold the gun in their real right hand
+--- (Dress.holdGun), so the lateral offsets are mirrored to come out of the gun that is drawn.
 function Guns.muzzle(id: string, x: number, z: number, facing: number, aimYaw: number?, kind: string?): Vector3
 	local h = Guns.hand(kind)
 	local m = Guns.muzzleLocal(id)
@@ -72,9 +129,9 @@ function Guns.muzzle(id: string, x: number, z: number, facing: number, aimYaw: n
 	end
 	local fs, fc = math.sin(facing), math.cos(facing)
 	local as, ac = math.sin(ay), math.cos(ay)
-	local hx = x + (h.X * fc + h.Z * fs)
-	local hz = z + (-h.X * fs + h.Z * fc)
-	return Vector3.new(hx + (m.X * ac + m.Z * as), h.Y + m.Y, hz + (-m.X * as + m.Z * ac))
+	local hx = x + (-h.X * fc + h.Z * fs)
+	local hz = z + (h.X * fs + h.Z * fc)
+	return Vector3.new(hx + (-m.X * ac + m.Z * as), h.Y + m.Y, hz + (m.X * as + m.Z * ac))
 end
 
 return Guns

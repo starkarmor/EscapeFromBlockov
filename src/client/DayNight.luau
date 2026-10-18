@@ -52,11 +52,72 @@ local function makeStreaks(w: number, h: number)
 	end
 end
 
+-- night vision (World sets body.nvg / body.thermal): the green phosphor look (grayscale, sepia, hue 62 deg, saturate 3.2,
+-- brightness 1.55, contrast 1.15) with the tube vignette (an ellipse clear to 62 %, rgba(0,12,0,.85) at the edge); thermal
+-- goggles: white-hot greyscale (brightness 1.3, contrast 1.45)
+local nvgCC = Instance.new("ColorCorrectionEffect")
+nvgCC.Name = "NightVision"
+nvgCC.Enabled = false
+nvgCC.Parent = Lighting
+local vignette = Instance.new("ImageLabel")
+vignette.Name = "NvgVignette"
+vignette.BackgroundTransparency = 1
+vignette.Size = UDim2.fromScale(1, 1)
+vignette.Visible = false
+vignette.ZIndex = 5
+vignette.Parent = gui
+do
+	local ok, img = pcall(function()
+		return game:GetService("AssetService"):CreateEditableImage({ Size = Vector2.new(128, 128) })
+	end)
+	if ok and img then
+		local px = buffer.create(128 * 128 * 4)
+		for y = 0, 127 do
+			for x = 0, 127 do
+				-- radial-gradient(ellipse 78% 92%): the ellipse radii are 78 / 92 % of half the box
+				local dx, dy = (x + 0.5 - 64) / (64 * 0.78), (y + 0.5 - 64) / (64 * 0.92)
+				local r = math.sqrt(dx * dx + dy * dy)
+				local a = math.clamp((r - 0.62) / (1 - 0.62), 0, 1) * 0.85
+				local o = (y * 128 + x) * 4
+				buffer.writeu8(px, o, 0)
+				buffer.writeu8(px, o + 1, 12)
+				buffer.writeu8(px, o + 2, 0)
+				buffer.writeu8(px, o + 3, math.floor(a * 255 + 0.5))
+			end
+		end
+		img:WritePixelsBuffer(Vector2.zero, Vector2.new(128, 128), px)
+		vignette.ImageContent = Content.fromObject(img)
+	end
+end
+
+local function nightVisionLook()
+	local v = player:GetAttribute("NvgView")
+	if v == 2 then
+		nvgCC.Enabled = true
+		nvgCC.Saturation = -1
+		nvgCC.TintColor = Color3.new(1, 1, 1)
+		nvgCC.Brightness = 0.15
+		nvgCC.Contrast = 0.45
+		vignette.Visible = true
+	elseif v == 1 then
+		nvgCC.Enabled = true
+		nvgCC.Saturation = -1
+		nvgCC.TintColor = Color3.fromRGB(150, 255, 140)
+		nvgCC.Brightness = 0.25
+		nvgCC.Contrast = 0.15
+		vignette.Visible = true
+	else
+		nvgCC.Enabled = false
+		vignette.Visible = false
+	end
+end
+
 local function lerpC(a: Color3, b: Color3, t: number): Color3
 	return a:Lerp(b, math.clamp(t, 0, 1))
 end
 
 function DayNight.update(dt: number?)
+	nightVisionLook()
 	local step = dt or 1 / 60
 	local cm = Workspace:GetAttribute("ClockMin")
 	if typeof(cm) ~= "number" then

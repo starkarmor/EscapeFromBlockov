@@ -9,6 +9,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Inv = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").Inv)
 local Guns = require(Shared.Guns)
 local Net = require(Shared.Net)
 local Units = require(Shared.Units)
@@ -46,6 +47,13 @@ local state: { [Player]: GunState } = {}
 Weapons.getGun = nil :: ((Player) -> any)? -- Raid: the player's held firearm instance {id, ammo, dur}
 Weapons.takeAmmo = nil :: ((Player, string, number) -> number)? -- Raid: remove up to n rounds of an ammo id, returns taken
 Weapons.countAmmo = nil :: ((Player, string) -> number)?
+Weapons.giveAmmo = nil :: ((Player, string, number) -> ())? -- Raid: rounds back into the backpack (an ammo swap)
+
+local function nextType(p: Player, g: any): string?
+	return Guns.ammoTypeFor(g, function(id)
+		return if Weapons.countAmmo then Weapons.countAmmo(p, id) else 0
+	end)
+end
 Weapons.isDodging = nil :: ((Player) -> boolean)?
 Weapons.onBag = nil :: ((Player) -> ())?
 Weapons.busy = nil :: ((Player) -> boolean)?
@@ -57,10 +65,20 @@ local function syncAmmo(p: Player)
 	end
 	if g then
 		p:SetAttribute("Gun", g.id)
+		-- the fitted parts (the client's feel uses the same Inv.gunFeel): "Slot=part,..."
+		local att = {}
+		for k, v in (g.att or {}) :: { [string]: string } do
+			table.insert(att, k .. "=" .. v)
+		end
+		table.sort(att)
+		p:SetAttribute("GunAtt", table.concat(att, ","))
 		p:SetAttribute("Mag", g.ammo)
 		p:SetAttribute("GunDur", g.dur or 100)
-		local ammoId = Guns.ammoOf(g.id)
+		-- Hud: the reserve of the type the next reload takes, the name of the loaded type
+		local ammoId = nextType(p, g)
 		p:SetAttribute("Reserve", if ammoId and Weapons.countAmmo then Weapons.countAmmo(p, ammoId) else 0)
+		p:SetAttribute("AmmoType", Guns.loadedType(g))
+		p:SetAttribute("AmmoSel", g.sel or Guns.loadedType(g))
 	else
 		p:SetAttribute("Gun", nil)
 		p:SetAttribute("Mag", 0)
@@ -84,7 +102,7 @@ local function onFire(p: Player, muzzle: any, yaws: any, slope: any, head: any)
 	if not root or not g then
 		return
 	end
-	local row = Guns.row(g.id)
+	local row = Inv.gunFeel(g)
 	if not row then
 		return
 	end
@@ -119,7 +137,7 @@ local function onFire(p: Player, muzzle: any, yaws: any, slope: any, head: any)
 	end
 	st.lastShot = now
 	g.ammo -= 1
-	local ammoId = Guns.ammoOf(g.id)
+	local ammoId = Guns.loadedType(g)
 	local ammo = ammoId and Guns.items[ammoId] and Guns.items[ammoId].ammo
 	g.dur = math.max(0, (g.dur or 100) - ((ammo and ammo.durCost) or 0.1))
 	local n = math.max(1, math.floor((row.ShotCount or 1) + 0.5))
@@ -174,7 +192,7 @@ local function onFire(p: Player, muzzle: any, yaws: any, slope: any, head: any)
 	-- everyone else draws the tracers
 	for _, other in Players:GetPlayers() do
 		if other ~= p then
-			Net.event("Fx"):FireClient(other, "shot", muzzle, clean, slope, row.BulletSpeed, range)
+			Net.event("Fx"):FireClient(other, "shot", muzzle, clean, slope, row.BulletSpeed, range, "#ffd27a")
 		end
 	end
 	if Weapons.onNoise then
@@ -190,16 +208,18 @@ local function onReload(p: Player)
 	if not g then
 		return
 	end
-	local row = Guns.row(g.id)
+	local row = Inv.gunFeel(g)
 	local st = state[p] or { lastShot = -math.huge }
 	state[p] = st
-	if st.reloadAt or not row or g.ammo >= row.Capacity then
+	-- Player.startReload: a different type to load counts as a reload even with a full magazine (the swap)
+	local ammoId = nextType(p, g)
+	local swapping = ammoId ~= Guns.loadedType(g) and (g.ammo or 0) > 0
+	if st.reloadAt or not row or (g.ammo >= row.Capacity and not swapping) then
 		return
 	end
 	if Weapons.busy and Weapons.busy(p) then
 		return -- an item use / interaction runs (Player.startReload 'busy')
 	end
-	local ammoId = Guns.ammoOf(g.id)
 	if not ammoId or not Weapons.countAmmo or Weapons.countAmmo(p, ammoId) <= 0 then
 		-- 'noammo' is the only refusal with feedback (World: toast "Out of ammo")
 		if g.ammo <= 0 then
@@ -324,10 +344,18 @@ local function step(dt: number)
 			st.reloadAt = nil
 			local g = Weapons.getGun and Weapons.getGun(p)
 			if g and Weapons.takeAmmo then
-				local row = Guns.row(g.id)
-				local ammoId = Guns.ammoOf(g.id)
+				-- Player.finishReload: a different type swaps (the old rounds back to the bag), then fill the magazine
+				local row = Inv.gunFeel(g)
+				local ammoId = nextType(p, g)
+				local cur = Guns.loadedType(g)
 				if row and ammoId then
-					g.ammo += Weapons.takeAmmo(p, ammoId, row.Capacity - g.ammo)
+					if ammoId ~= cur and (g.ammo or 0) > 0 and cur and Weapons.giveAmmo then
+						Weapons.giveAmmo(p, cur, g.ammo)
+						g.ammo = 0
+					end
+					g.loaded = ammoId
+					g.sel = ammoId
+					g.ammo += Weapons.takeAmmo(p, ammoId, math.floor(row.Capacity) - g.ammo)
 				end
 			end
 			p:SetAttribute("ReloadUntil", nil)
@@ -339,6 +367,20 @@ end
 function Weapons.start()
 	Net.event("Fire").OnServerEvent:Connect(onFire)
 	Net.event("Reload").OnServerEvent:Connect(onReload)
+	-- BulletTypeHUD.SetBulletType: a different type becomes the target and the character tries to reload
+	Net.event("SetAmmo").OnServerEvent:Connect(function(p, id)
+		local g = Weapons.getGun and Weapons.getGun(p)
+		if not g or typeof(id) ~= "string" or not table.find(Guns.ammoTypesFor(g.id), id) then
+			return
+		end
+		if id == (g.sel or Guns.loadedType(g)) then
+			return
+		end
+		g.sel = id
+		Weapons.cancelReload(p)
+		onReload(p)
+		syncAmmo(p)
+	end)
 	RunService.Heartbeat:Connect(step)
 	Players.PlayerRemoving:Connect(function(p)
 		state[p] = nil

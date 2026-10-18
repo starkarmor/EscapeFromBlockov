@@ -1,10 +1,10 @@
 --!strict
--- Local effects in the art brief's VFX grammar (white core, coloured body, timed expansion, clean decay):
--- bullet tracers that fly at the real bullet speed, muzzle flash, impact stars, hit marker, damage numbers.
+-- Local effects as the web build draws them (World.ts): bullet tracers at the real bullet speed, the shared particle pool
+-- (blood, dust, sparks, shells, blasts), the muzzle light, blood decals, the hit flash, hit marker and damage numbers.
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local AssetService = game:GetService("AssetService")
 local Players = game:GetService("Players")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -21,249 +21,393 @@ bulletParams.CollisionGroup = "QBullet"
 bulletParams.FilterType = Enum.RaycastFilterType.Exclude
 bulletParams.FilterDescendantsInstances = { folder }
 
-local GOLD = Color3.fromRGB(255, 216, 61)
-local WHITE = Color3.new(1, 1, 1)
-local CORAL = Color3.fromRGB(243, 69, 67)
-
-local function neon(size: Vector3, cf: CFrame, color: Color3, transparency: number?): Part
+-- ------------------------------------------------------------------ particles (World.burst / updateParticles)
+-- 100 pooled 0.13 m cubes in flat unlit colours (MeshBasicMaterial): each colour is a Model whose Highlight fills its
+-- cubes with exactly that colour (Highlight fill is unlit), occluded by the world like the web's depth-tested meshes.
+local POOL = 100
+type Particle = { part: Part, life: number, v: Vector3, hex: string? }
+local particles: { Particle } = {}
+type Group = { model: Model, hl: Highlight, n: number }
+local groups: { [string]: Group } = {}
+for i = 1, POOL do
 	local p = Instance.new("Part")
+	p.Name = "P"
 	p.Anchored = true
 	p.CanCollide = false
 	p.CanQuery = false
 	p.CanTouch = false
 	p.CastShadow = false
-	p.Material = Enum.Material.Neon
-	p.Color = color
-	p.Size = size
-	p.CFrame = cf
-	p.Transparency = transparency or 0
-	p.Parent = folder
-	return p
+	p.Material = Enum.Material.SmoothPlastic
+	p.Size = Vector3.one * 0.13 * S
+	particles[i] = { part = p, life = 0, v = Vector3.zero, hex = nil }
 end
 
-type Tracer = { part: Part, o: Vector3, d: Vector3, speed: number, len: number, t: number, maxT: number }
+local function groupOf(hex: string): Group
+	local g = groups[hex]
+	if g then
+		return g
+	end
+	local m = Instance.new("Model")
+	m.Name = "P_" .. hex
+	m.Parent = folder
+	local hl = Instance.new("Highlight")
+	hl.FillColor = Color3.fromHex(hex)
+	hl.FillTransparency = 0
+	hl.OutlineTransparency = 1
+	hl.DepthMode = Enum.HighlightDepthMode.Occluded
+	hl.Enabled = false
+	hl.Adornee = m
+	hl.Parent = m
+	g = { model = m, hl = hl, n = 0 }
+	groups[hex] = g
+	return g
+end
+
+local function release(q: Particle)
+	q.life = 0
+	q.part.Parent = nil
+	local g = q.hex and groups[q.hex]
+	if g then
+		g.n -= 1
+		if g.n <= 0 then
+			g.n = 0
+			g.hl.Enabled = false
+		end
+	end
+	q.hex = nil
+end
+
+local function spawnParticle(q: Particle, at: Vector3, hex: string, life: number, v: Vector3)
+	if q.life > 0 then
+		release(q)
+	end
+	local g = groupOf(hex)
+	q.life = life
+	q.v = v
+	q.hex = hex
+	q.part.Color = Color3.fromHex(hex)
+	q.part.CFrame = CFrame.new(at * S)
+	q.part.Parent = g.model
+	g.n += 1
+	g.hl.Enabled = true
+end
+
+--- World.burst(x, y, z, color, n, speed = 4): n free cubes, life 0.3-0.6 s, vx / vz +-speed / 2, vy 1 + rand x 0.8 speed
+function Fx.burst(at: Vector3, hex: string, n: number, speed: number?)
+	local sp = speed or 4
+	local spawned = 0
+	for _, q in particles do
+		if q.life <= 0 then
+			spawnParticle(q, at, hex, 0.3 + math.random() * 0.3,
+				Vector3.new((math.random() - 0.5) * sp, math.random() * sp * 0.8 + 1, (math.random() - 0.5) * sp))
+			spawned += 1
+			if spawned >= n then
+				break
+			end
+		end
+	end
+end
+
+--- World.ejectShell: one brass cube thrown out of the gun's side at 1.2 m for 0.6 s (the web's (cos f, -sin f), mirrored
+--- to the avatar's real right hand like Guns.muzzle)
+function Fx.shell(x: number, z: number, facing: number)
+	for _, q in particles do
+		if q.life <= 0 then
+			local rx, rz = -math.cos(facing), math.sin(facing)
+			spawnParticle(q, Vector3.new(x + rx * 0.3, 1.2, z + rz * 0.3), "#d9a440", 0.6,
+				Vector3.new(rx * (2 + math.random() * 1.5), 3, rz * (2 + math.random() * 1.5)))
+			return
+		end
+	end
+end
+
+-- ------------------------------------------------------------------ bullets (World.spawnBullet / updateProjectiles)
+-- a 0.06 x 0.06 x 2.2 m unlit box centred on the bullet, turned to its yaw only: the player's #ffe08a, the enemies'
+-- #ffc04a; the bloater's ring shots are a 0.17 m icosahedron #b8f060
+type Tracer = { part: Part, hex: string, o: Vector3, d: Vector3, yaw: number, speed: number, t: number, maxT: number }
 local tracers: { Tracer } = {}
 
---- a bullet: from muzzle `o` (metres) along yaw / slope at `speed` m/s for `range` m (capped at the first wall)
-function Fx.tracer(o: Vector3, yaw: number, slope: number, speed: number, range: number, mine: boolean)
-	local d = Vector3.new(math.sin(yaw), slope, math.cos(yaw)).Unit
-	local hit = Workspace:Raycast(o * S, d * range * S, bulletParams)
-	local dist = if hit then (hit.Position / S - o).Magnitude else range
+--- a bullet: from muzzle `o` (metres) along yaw / slope at `speed` m/s for `range` m (capped at the first wall or body)
+function Fx.tracer(o: Vector3, yaw: number, slope: number, speed: number, range: number, mine: boolean, hex: string?)
+	local d = Vector3.new(math.sin(yaw), slope, math.cos(yaw))
+	local hit = Workspace:Raycast(o * S, d.Unit * range * S * d.Magnitude, bulletParams)
+	local dist = if hit then Vector2.new(hit.Position.X / S - o.X, hit.Position.Z / S - o.Z).Magnitude else range
+	local wallDist = dist
 	-- stop at the first character capsule on the line (hit3d radius 0.5 m), like the server's bullet
 	local chars = Workspace:FindFirstChild("Characters")
-	if chars and not mine then
-		-- someone else's shot can end on anyone, our own character included
-	end
 	if chars then
 		local d2 = Vector2.new(d.X, d.Z)
-		local dl = d2.Magnitude
-		if dl > 1e-6 then
-			d2 /= dl
-			for _, m in chars:GetChildren() do
-				local r = m:FindFirstChild("HumanoidRootPart") :: BasePart?
-				if r and not m:GetAttribute("Dead") then
-					local rel = Vector2.new(r.Position.X / S - o.X, r.Position.Z / S - o.Z)
-					local along = rel:Dot(d2)
-					if along > 0.9 and along / dl < dist and (rel - d2 * along).Magnitude <= 0.5 then
-						dist = math.min(dist, along / dl)
-					end
+		for _, m in chars:GetChildren() do
+			local r = m:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if r and not m:GetAttribute("Dead") and not (mine and m == Players.LocalPlayer.Character) then
+				local rel = Vector2.new(r.Position.X / S - o.X, r.Position.Z / S - o.Z)
+				local along = rel:Dot(d2)
+				if along > 0.9 and along < dist and (rel - d2 * along).Magnitude <= 0.5 then
+					dist = along
 				end
 			end
 		end
 	end
-	local part = neon(Vector3.new(0.12, 0.12, 1.4) * S * 0.5, CFrame.lookAt(o * S, (o + d) * S), Color3.fromRGB(255, 244, 196))
-	table.insert(tracers, { part = part, o = o, d = d, speed = speed, len = 0.7, t = 0, maxT = dist / speed })
-	if hit and mine then
+	local ring = hex == "#b8f060"
+	local col = if mine then "#ffe08a" elseif ring then "#b8f060" else "#ffc04a"
+	local g = groupOf(col)
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Material = Enum.Material.SmoothPlastic
+	part.Color = Color3.fromHex(col)
+	if ring then
+		part.Shape = Enum.PartType.Ball
+		part.Size = Vector3.one * 0.34 * S
+	else
+		part.Size = Vector3.new(0.06, 0.06, 2.2) * S
+	end
+	part.CFrame = CFrame.new(o * S) * CFrame.Angles(0, yaw + math.pi, 0)
+	part.Parent = g.model
+	g.n += 1
+	g.hl.Enabled = true
+	table.insert(tracers, { part = part, hex = col, o = o, d = d, yaw = yaw, speed = speed, t = 0, maxT = dist / speed })
+	-- every bullet that ends on the world bursts there (the bodies' own hits come from the server's hit events)
+	if hit and dist >= wallDist - 1e-3 then
+		local inst = hit.Instance
 		task.delay(dist / speed, function()
-			Fx.impact(hit.Position / S, hit.Normal)
+			Fx.impact(hit.Position / S, inst)
 		end)
 	end
 end
 
-function Fx.muzzle(o: Vector3, facing: number)
-	local cf = CFrame.new(o * S) * CFrame.Angles(0, facing, 0)
-	local core = neon(Vector3.one * 0.55, cf, WHITE)
-	local rays = neon(Vector3.new(1.4, 0.25, 0.25), cf * CFrame.Angles(0, math.pi / 2, math.rad(45)), GOLD)
-	local rays2 = neon(Vector3.new(1.4, 0.25, 0.25), cf * CFrame.Angles(0, math.pi / 2, math.rad(-45)), GOLD)
-	local light = Instance.new("PointLight")
-	light.Color = GOLD
-	light.Range = 12
-	light.Brightness = 3
-	light.Parent = core
-	task.delay(1 / 30, function()
-		rays:Destroy()
-		rays2:Destroy()
-	end)
-	task.delay(2 / 30, function()
-		core:Destroy()
-	end)
-end
+-- the muzzle light (World.flash: one PointLight, distance 9 m, 0.06 s linear fade from full)
+local flashPart = Instance.new("Part")
+flashPart.Name = "MuzzleLight"
+flashPart.Anchored = true
+flashPart.CanCollide = false
+flashPart.CanQuery = false
+flashPart.CanTouch = false
+flashPart.Transparency = 1
+flashPart.Size = Vector3.one * 0.1
+flashPart.Parent = folder
+local flashLight = Instance.new("PointLight")
+flashLight.Range = 9 * S
+flashLight.Brightness = 0
+flashLight.Shadows = false
+flashLight.Parent = flashPart
+local flashT = 0
+local FLASH_BRIGHT = 6
 
-function Fx.impact(at: Vector3, normal: Vector3?)
-	local cf = CFrame.new(at * S)
-	local star = neon(Vector3.one * 0.7, cf * CFrame.Angles(0, 0, math.rad(45)), WHITE)
-	TweenService:Create(star, TweenInfo.new(0.15), { Size = Vector3.one * 0.05, Transparency = 1 }):Play()
-	for i = 1, 4 do
-		local chunk = neon(Vector3.one * 0.3, cf, if i % 2 == 0 then CORAL else GOLD)
-		local dir = (Vector3.new(math.random() - 0.5, math.random(), math.random() - 0.5)).Unit * 3
-		TweenService:Create(chunk, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = cf + dir, Transparency = 1, Size = Vector3.one * 0.05 }):Play()
-		task.delay(0.26, function()
-			chunk:Destroy()
-		end)
+--- World.muzzleFlash (light + 2 #ffe08a cubes at speed 1.5); the shooter's own shot also ejects a shell and throws
+--- 2 #ffd36b cubes 0.3 m ahead at speed 2 (World.fireGun)
+function Fx.muzzle(o: Vector3, facing: number, hex: string?, mine: boolean?, from: Vector3?)
+	flashPart.CFrame = CFrame.new(o.X * S, (o.Y + 0.1) * S, o.Z * S)
+	flashLight.Color = Color3.fromHex(hex or "#ffd27a")
+	flashT = 0.06
+	flashLight.Brightness = FLASH_BRIGHT
+	Fx.burst(o, "#ffe08a", 2, 1.5)
+	if mine then
+		local p = from or o
+		Fx.shell(p.X, p.Z, facing)
+		Fx.burst(Vector3.new(o.X + math.sin(facing) * 0.3, o.Y, o.Z + math.cos(facing) * 0.3), "#ffd36b", 2, 2)
 	end
-	task.delay(0.16, function()
-		star:Destroy()
-	end)
 end
 
---- explosion (VFX grammar: white core, gold body, coral chunks, an expanding ring, clean decay)
-function Fx.explode(at: Vector3, radius: number)
-	local cf = CFrame.new(at.X * S, 0.6 * S, at.Z * S)
-	local core = neon(Vector3.one * 1.5, cf, WHITE)
-	core.Shape = Enum.PartType.Ball
-	TweenService:Create(core, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.one * radius * S * 1.2, Transparency = 1 }):Play()
-	local body = neon(Vector3.one * 2, cf, GOLD, 0.15)
-	body.Shape = Enum.PartType.Ball
-	TweenService:Create(body, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.one * radius * S * 1.8, Transparency = 1 }):Play()
-	local ring = neon(Vector3.new(0.2, 2, 2), CFrame.new(at.X * S, 0.1 * S, at.Z * S) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(255, 248, 233), 0.2)
-	ring.Shape = Enum.PartType.Cylinder
-	TweenService:Create(ring, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.05, radius * S * 2.4, radius * S * 2.4), Transparency = 1 }):Play()
-	for i = 1, 10 do
-		local chunk = neon(Vector3.one * 0.6, cf, if i % 2 == 0 then CORAL else GOLD)
-		local dir = Vector3.new(math.random() - 0.5, math.random() * 0.8 + 0.2, math.random() - 0.5).Unit * radius * S
-		TweenService:Create(chunk, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = cf + dir, Transparency = 1, Size = Vector3.one * 0.1 }):Play()
-		task.delay(0.55, function()
-			chunk:Destroy()
-		end)
+--- a bullet ending on the world (World.updateProjectiles): the ground #9a8a6a x2 at speed 2 on the floor, a wall
+--- #cfc9b8 x3 at speed 3 at the bullet's height; half cover also takes the hit (#b8a77e x3 at 0.9 m)
+function Fx.impact(at: Vector3, inst: Instance?)
+	local ground = at.Y <= 0.06 or (inst ~= nil and inst:IsA("BasePart") and inst.CollisionGroup == "Ground")
+	if ground then
+		Fx.burst(Vector3.new(at.X, 0.05, at.Z), "#9a8a6a", 2, 2)
+		return
 	end
-	task.delay(0.5, function()
-		core:Destroy()
-		body:Destroy()
-		ring:Destroy()
+	Fx.burst(Vector3.new(at.X, math.max(0.05, at.Y), at.Z), "#cfc9b8", 3, 3)
+	if inst and inst:GetAttribute("Cover") ~= nil then
+		Fx.burst(Vector3.new(at.X, 0.9, at.Z), "#b8a77e", 3, 3)
+	end
+end
+
+--- half cover or a wall knocked down (World.damageCover): #8a8270 x14 at speed 5, 0.6 m up
+function Fx.debris(at: Vector3)
+	Fx.burst(Vector3.new(at.X, 0.6, at.Z), "#8a8270", 14, 5)
+end
+
+--- World.blast: every explosion (the flashbang too) is 28 #ffb347 cubes at speed 9 and 18 #555555 at speed 6, 0.8 m up
+function Fx.explode(at: Vector3, _radius: number?)
+	local c = Vector3.new(at.X, 0.8, at.Z)
+	Fx.burst(c, "#ffb347", 28, 9)
+	Fx.burst(c, "#555555", 18, 6)
+end
+
+-- ------------------------------------------------------------------ blood decals (World.decal / updateDecals)
+-- 40 round-robin octagons (CircleGeometry(0.45, 8): corners on the axes), #5a1410, unlit, opacity min(0.75, life / 5),
+-- 25 s. Each is an unlit SurfaceGui (LightInfluence 0) on the top of a thin invisible plate; the plates sit a hair apart
+-- in height so overlapping splats blend instead of z-fighting (the web draws them without depth writes).
+local OCT_N = 64
+local octImage: any = nil
+do
+	local ok, img = pcall(function()
+		return AssetService:CreateEditableImage({ Size = Vector2.new(OCT_N, OCT_N) })
 	end)
-end
-
---- flashbang: a white burst, no fireball (the source has no whiteout)
-function Fx.flash(at: Vector3, radius: number)
-	local cf = CFrame.new(at.X * S, 0.6 * S, at.Z * S)
-	local core = neon(Vector3.one * 1.5, cf, WHITE)
-	core.Shape = Enum.PartType.Ball
-	TweenService:Create(core, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.one * radius * S * 1.4, Transparency = 1 }):Play()
-	task.delay(0.3, function()
-		core:Destroy()
-	end)
-end
-
--- ------------------------------------------------------------------ blood (World.burst / addDecal, Character flash)
-type Cube = { part: Part, v: Vector3, life: number, t: number }
-local cubes: { Cube } = {}
-local cubePool: { Part } = {}
-local function cube(at: Vector3, color: Color3, speed: number)
-	local p = table.remove(cubePool) or neon(Vector3.one * 0.13 * S, CFrame.new(), color)
-	p.Material = Enum.Material.SmoothPlastic
-	p.Color = color
-	p.Transparency = 0
-	p.Size = Vector3.one * 0.13 * S
-	p.CFrame = CFrame.new(at * S)
-	p.Parent = folder
-	-- vx, vz = +-speed / 2, vy = rand * 0.8 * speed + 1; life 0.3-0.6 s; gravity 14; floor 0.05 m
-	local v = Vector3.new((math.random() - 0.5) * speed, math.random() * 0.8 * speed + 1, (math.random() - 0.5) * speed)
-	table.insert(cubes, { part = p, v = v, life = 0.3 + math.random() * 0.3, t = 0 })
-end
-
-function Fx.burst(at: Vector3, color: Color3, n: number, speed: number)
-	for _ = 1, n do
-		if #cubes < 100 then
-			cube(at, color, speed)
+	if ok and img then
+		-- coverage of the regular octagon (circumradius = half the image) by 4x4 supersampling
+		local px = buffer.create(OCT_N * OCT_N * 4)
+		local R = OCT_N / 2
+		local apo = R * math.cos(math.pi / 8)
+		for y = 0, OCT_N - 1 do
+			for x = 0, OCT_N - 1 do
+				local cover = 0
+				for sy = 0, 3 do
+					for sx = 0, 3 do
+						local dx = x + (sx + 0.5) / 4 - R
+						local dy = y + (sy + 0.5) / 4 - R
+						local inside = true
+						for k = 0, 7 do
+							-- edge normals at 22.5 + 45k degrees (corners at 0, 45, 90 ...)
+							local a = math.pi / 8 + k * math.pi / 4
+							if dx * math.cos(a) + dy * math.sin(a) > apo then
+								inside = false
+								break
+							end
+						end
+						if inside then
+							cover += 1
+						end
+					end
+				end
+				local o = (y * OCT_N + x) * 4
+				buffer.writeu8(px, o, 255)
+				buffer.writeu8(px, o + 1, 255)
+				buffer.writeu8(px, o + 2, 255)
+				buffer.writeu8(px, o + 3, math.floor(cover / 16 * 255 + 0.5))
+			end
 		end
+		img:WritePixelsBuffer(Vector2.zero, Vector2.new(OCT_N, OCT_N), px)
+		octImage = img
 	end
 end
 
--- 40 ground decals (r 0.45 m circles, #5a1410), round-robin, life 25 s, opacity min(0.75, life / 5)
 local DECAL = Color3.fromHex("#5a1410")
-local decals: { { part: Part, life: number } } = {}
+type Decal = { part: Part, img: ImageLabel, life: number }
+local decals: { Decal } = {}
 local decalNext = 1
-function Fx.decal(x: number, z: number, scale: number)
-	local d = decals[decalNext]
-	if not d then
-		local p = Instance.new("Part")
-		p.Shape = Enum.PartType.Cylinder
-		p.Anchored = true
-		p.CanCollide = false
-		p.CanQuery = false
-		p.CanTouch = false
-		p.CastShadow = false
-		p.Material = Enum.Material.SmoothPlastic
-		p.Color = DECAL
-		p.Parent = folder
-		d = { part = p, life = 0 }
-		decals[decalNext] = d
+local function makeDecal(slot: number): Decal
+	local p = Instance.new("Part")
+	p.Name = "Blood"
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Transparency = 1
+	p.Size = Vector3.new(0.9 * S, 0.02, 0.9 * S)
+	p.Parent = folder
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Top
+	gui.LightInfluence = 0
+	gui.Brightness = 1
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	gui.CanvasSize = Vector2.new(OCT_N, OCT_N)
+	gui.ClipsDescendants = false
+	gui.Adornee = p
+	gui.Parent = p
+	local img = Instance.new("ImageLabel")
+	img.BackgroundTransparency = 1
+	img.Size = UDim2.fromScale(1, 1)
+	img.ImageColor3 = DECAL
+	img.ImageTransparency = 1
+	if octImage then
+		img.ImageContent = Content.fromObject(octImage)
+	else
+		-- no EditableImage: a round splat
+		img.BackgroundColor3 = DECAL
+		Instance.new("UICorner", img).CornerRadius = UDim.new(0.5, 0)
 	end
-	local k = scale * (0.7 + math.random() * 0.6)
-	d.part.Size = Vector3.new(0.02 * S, 0.9 * S * k, 0.9 * S * k)
-	d.part.CFrame = CFrame.new(x * S, 0.05 * S, z * S) * CFrame.Angles(0, 0, math.pi / 2)
-	d.life = 25
-	decalNext = decalNext % 40 + 1
+	img.Parent = gui
+	local _ = slot
+	return { part = p, img = img, life = 0 }
 end
 
---- hit flash: a white (enemy) / orange #ffb347 (player) overlay for 0.125 s, then the emissive decay at 8 / s
-function Fx.flash(model: Model?, color: Color3)
+function Fx.decal(x: number, z: number, size: number)
+	local slot = decalNext
+	local d = decals[slot]
+	if not d then
+		d = makeDecal(slot)
+		decals[slot] = d
+	end
+	decalNext = decalNext % 40 + 1
+	local k = size * (0.7 + math.random() * 0.6)
+	d.part.Size = Vector3.new(0.9 * S * k, 0.02, 0.9 * S * k)
+	d.part.CFrame = CFrame.new(x * S, (0.05 + slot * 0.0006) * S - 0.01, z * S)
+	d.life = 25
+end
+
+local function setDecalAlpha(d: Decal, a: number)
+	if octImage then
+		d.img.ImageTransparency = 1 - a
+	else
+		d.img.BackgroundTransparency = 1 - a
+	end
+end
+
+-- ------------------------------------------------------------------ hit flash (World.flashModel)
+-- every mesh of the model swaps to a flat unlit white (enemy hit) / #ffb347 (player hurt) for 0.125 s; a new hit
+-- restarts the time. (The red emissive under it, hurtFlash x 0.6 at 8 / s, has decayed to 0 exactly when it ends.)
+local flashes: { [Model]: { hl: Highlight, t: number } } = {}
+function Fx.hitFlash(model: Model?, color: Color3)
 	if not model or not model.Parent then
 		return
 	end
-	local h = model:FindFirstChild("HitFlash") :: Highlight?
-	if not h then
-		h = Instance.new("Highlight")
-		h.Name = "HitFlash"
-		h.OutlineTransparency = 1
-		h.DepthMode = Enum.HighlightDepthMode.Occluded
-		h.Parent = model
+	local f = flashes[model]
+	if not f then
+		local hl = model:FindFirstChild("HitFlash") :: Highlight?
+		if not hl then
+			hl = Instance.new("Highlight")
+			hl.Name = "HitFlash"
+			hl.OutlineTransparency = 1
+			hl.FillTransparency = 0
+			hl.DepthMode = Enum.HighlightDepthMode.Occluded
+			hl.Parent = model
+		end
+		f = { hl = hl :: Highlight, t = 0 }
+		flashes[model] = f
 	end
-	h.FillColor = color
-	h.FillTransparency = 0.15
-	h.Enabled = true
-	local token = os.clock()
-	h:SetAttribute("T", token)
-	task.spawn(function()
-		task.wait(0.125)
-		local a = 0.6
-		while a > 0 and h.Parent and h:GetAttribute("T") == token do
-			local dt = task.wait()
-			a -= dt * 8 * 0.6
-			h.FillTransparency = 1 - math.max(0, a)
-		end
-		if h.Parent and h:GetAttribute("T") == token then
-			h.Enabled = false
-		end
-	end)
+	f.hl.FillColor = color
+	f.hl.Enabled = true
+	f.t = 0.125
 end
 
-local ENEMY_BLOOD = Color3.fromHex("#b0161b")
-local PLAYER_BLOOD = Color3.fromHex("#c8392f")
---- one hit as World.applyHit draws it
+local ENEMY_BLOOD = "#b0161b"
+local PLAYER_BLOOD = "#c8392f"
+--- one hit as World.damageEnemy / the player's takeHit draw it: everything on the victim's body position at BODY_FX_Y
+--- (1.2 x RIG_SCALE = 0.615 m), not the bullet's contact point; h.at is rewritten to it for the damage number
+local BODY_FX_Y = 1.2 * 1.107 / 2.16
 function Fx.hit(h: any)
+	local root = h.model and h.model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		h.at = Vector3.new(root.Position.X / S, BODY_FX_Y, root.Position.Z / S)
+	else
+		h.at = Vector3.new(h.at.X, BODY_FX_Y, h.at.Z)
+	end
 	local at: Vector3 = h.at
 	if h.kind == "enemy" then
-		local n = if h.kill then 26 elseif h.crit then 10 else 6
-		Fx.burst(at, ENEMY_BLOOD, n, if h.kill then 6 else 4)
+		Fx.burst(at, ENEMY_BLOOD, if h.kill then 26 elseif h.crit then 10 else 6, if h.kill then 6 else 4)
 		if not h.kill then
-			Fx.flash(h.model, Color3.new(1, 1, 1))
+			Fx.hitFlash(h.model, Color3.new(1, 1, 1))
 		end
 		if h.byPlayer then
+			Fx.decal(at.X + (math.random() - 0.5) * 0.6, at.Z + (math.random() - 0.5) * 0.6, if h.kill then 1.6 else 0.8)
+			-- death: a wide splatter of several overlapping decals around the body
 			if h.kill then
-				Fx.decal(at.X, at.Z, 1.6)
 				for _ = 1, 6 do
 					Fx.decal(at.X + (math.random() - 0.5) * 2.4, at.Z + (math.random() - 0.5) * 2.4, 0.7 + math.random() * 1.1)
 				end
-			else
-				Fx.decal(at.X + (math.random() - 0.5) * 0.6, at.Z + (math.random() - 0.5) * 0.6, 0.8)
 			end
 		end
 	elseif h.kind == "player" then
 		Fx.burst(at, PLAYER_BLOOD, 5, 4)
-		Fx.flash(h.model, Color3.fromHex("#ffb347"))
+		Fx.hitFlash(h.model, Color3.fromHex("#ffb347"))
 		if h.bullet then
-			Fx.decal(at.X, at.Z, 0.7)
+			Fx.decal(at.X + (math.random() - 0.5), at.Z + (math.random() - 0.5), 0.7)
 		end
 	end
 end
@@ -285,27 +429,33 @@ function Fx.damageNumber(at: Vector3, dmg: number, crit: boolean)
 end
 
 RunService.RenderStepped:Connect(function(dt)
-	for i = #cubes, 1, -1 do
-		local c = cubes[i]
-		c.t += dt
-		if c.t >= c.life then
-			c.part.Parent = nil
-			table.insert(cubePool, c.part)
-			table.remove(cubes, i)
-		else
-			c.v -= Vector3.new(0, 14 * dt, 0)
-			local p = c.part.Position / S + c.v * dt
-			if p.Y < 0.05 then
-				p = Vector3.new(p.X, 0.05, p.Z)
-				c.v = Vector3.new(c.v.X * 0.5, 0, c.v.Z * 0.5)
+	for _, q in particles do
+		if q.life > 0 then
+			q.life -= dt
+			if q.life <= 0 then
+				release(q)
+			else
+				q.v -= Vector3.new(0, 14 * dt, 0)
+				local p = q.part.Position / S
+				q.part.CFrame = CFrame.new(p.X * S + q.v.X * dt * S, math.max(0.05, p.Y + q.v.Y * dt) * S, p.Z * S + q.v.Z * dt * S)
 			end
-			c.part.CFrame = CFrame.new(p * S)
 		end
+	end
+	if flashT > 0 then
+		flashT -= dt
+		flashLight.Brightness = math.max(0, flashT / 0.06) * FLASH_BRIGHT
 	end
 	for _, d in decals do
 		if d.life > 0 then
 			d.life -= dt
-			d.part.Transparency = 1 - math.min(0.75, math.max(0, d.life) / 5)
+			setDecalAlpha(d, math.min(0.75, math.max(0, d.life) / 5))
+		end
+	end
+	for model, f in flashes do
+		f.t -= dt
+		if f.t <= 0 or not model.Parent then
+			f.hl.Enabled = false
+			flashes[model] = nil
 		end
 	end
 	for i = #tracers, 1, -1 do
@@ -313,14 +463,18 @@ RunService.RenderStepped:Connect(function(dt)
 		t.t += dt
 		if t.t >= t.maxT then
 			t.part:Destroy()
+			local g = groups[t.hex]
+			if g then
+				g.n -= 1
+				if g.n <= 0 then
+					g.n = 0
+					g.hl.Enabled = false
+				end
+			end
 			table.remove(tracers, i)
 		else
-			local head = t.o + t.d * (t.t * t.speed)
-			local tailD = math.min(t.len, t.t * t.speed)
-			local tail = head - t.d * tailD
-			local mid = (head + tail) * 0.5
-			t.part.Size = Vector3.new(0.09 * S, 0.09 * S, math.max(0.05, tailD) * S)
-			t.part.CFrame = CFrame.lookAt(mid * S, head * S)
+			local p = t.o + t.d * (t.t * t.speed)
+			t.part.CFrame = CFrame.new(p * S) * CFrame.Angles(0, t.yaw + math.pi, 0)
 		end
 	end
 end)

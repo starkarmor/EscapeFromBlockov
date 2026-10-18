@@ -156,6 +156,51 @@
    "system": "camera framing",
    "result": "same spot side by side with the web build (bunker hatch): matching angle, distance, character size and prompt placement",
    "evidence": "/tmp captures web_8282.png vs rbx_spawn"
+  },
+  {
+   "system": "dodge roll",
+   "result": "the web DodgeRoll_Forward clip retargeted onto all 13 R15 joints (tools/gen_roll.py -> gen/RollClip): dive, inverted at 0.28, back-roll, arm fling, neck over-rotation; the gun rides the hand level (Beaver.ts weapon holder); dust puff every frame; enemies slide without it",
+   "evidence": "DevRollPhase side captures at 8 phases + a live W+Space roll; Animator/Animate/IK/weld restored after",
+   "note": "avatar joints are AnimationConstraints after Roblox's joint upgrade; the Animator rewrites Transform after every script phase, so the pose parks the Animator (Parent nil) while it drives the body"
+  },
+  {
+   "system": "blood and hit fx",
+   "result": "World.burst pool (100 x 0.13 m flat-colour cubes via per-colour Highlights, exact velocities/gravity/floor clamp), 40 octagon decals (unlit SurfaceGui, min(0.75, life/5), 25 s), 0.125 s solid white/orange flash, blood at the victim's body (BODY_FX_Y 0.615 m), damage numbers with the random 3D launch; bullets are the web's 0.06x0.06x2.2 m unlit boxes; muzzle = light + #ffe08a/#ffd36b cubes + shell; wall/ground/cover impact bursts; blasts (flashbang too) = 28 #ffb347 + 18 #555555 cubes",
+   "evidence": "real-input shooting of a spawned scav on open ground: hit bursts, kill splatter of 7 overlapping octagons, crit numbers, player hurt flash",
+   "note": "fixed: Fx.flash was defined twice (hit flash overwrote the flashbang); the neon star / fireball effects were inventions not in the web build"
+  },
+  {
+   "system": "muzzle on the drawn gun",
+   "result": "Guns.muzzle mirrors the web's lateral hand/muzzle offsets: tracers, the server bullet origin and the shell now leave the gun in the avatar's right hand (drawn vs formula within 0.04 m; was 0.54 m apart)",
+   "evidence": "client probe of HeldGun bbox front vs Guns.muzzle",
+   "note": "deliberate adaptation: the web build keeps the source's left-handed Unity coordinates in a right-handed world, so its 'right' hand is anatomically the left; Roblox avatars stay right-handed"
+  },
+  {
+   "system": "LootView (inventory / loot / hotbar editor)",
+   "result": "1:1 with src/ui/InventoryUI.ts + inventory.css: positional backpack (Inv.luau = inventory.ts port: layout, AddAt, AddAndMerge, Combine, TryMerge Sort with locks, capacity repack), 10 equipment SlotDisplays with ghosts, wallet chips, weight bar 25/75 marks, dog's bag, loot pane with striped search cells + spinning magnifier, hotbar editor, ItemDetails with attachment slots and stat rows, ItemHoveringUI (+Shift extras, key hints), ItemOperationMenu (colours, corner pinning), ItemSplitDialogue (round-half-even default), ItemDraggingUI ghost",
+   "evidence": "real-input Studio runs: drag to equip / swap / merge, Ctrl+drag split + Backpack-full refusal, right-click menu Split / Unload / Mark, double click equip (bag and loot quick-equip), hotbar drag rebinding, grip dragged onto the AK's Grip slot, F store into the open box, L lock kept by Sort, N mark, X drop to a ground pile",
+   "note": "server-authoritative (server/Inventory.luau, InvOp remote); state pushed only while the view is open, at most once a frame; gun icons are pooled ViewportFrame renders of the Creator Store models; panels use the web tints over a dark underlay (Roblox GUI has no backdrop blur)"
+  },
+  {
+   "system": "gun attachments",
+   "result": "GUN_SLOTS / partFits / gunFeel part mods (add / pct / mul) applied to the held gun's server stats (capacity, reload, scatter...) and shown in tooltips / details",
+   "evidence": "Vertical Grip I fitted: tooltip -23% recoil / +5% fire rate; GunAtt attribute"
+  },
+  {
+   "system": "player feedback (audit vs Hud.ts / WorldUI.ts / World hooks)",
+   "result": "loose ground items + 'Name xN' pickup toast and sound; Empty slot / No melee weapon / Not usable / Door unlocked / Requires <Key> / Note added / night vision toasts; extraction cancel only past 0.5 s; kill vs hit, hurt on hits, death, use, throw, shotgun, loot reveal sounds; DoT tick numbers and hazard hurt flash; the player's own HP plate; ghost / edge alert bubbles; footstep pings; the web's arc sound markers; armor widget cur/max with none / broken; status pills with icons, layers, countdown, pop-in",
+   "evidence": "Studio runs: HUD captures (Agile pill, armor 60/60, empty-armor state, own HP plate), 'No night vision' toast, console clean"
+  },
+  {
+   "system": "controls",
+   "result": "T ammo-type list with swap reload (8 rusty back to the bag, 8 armor-breaker loaded), Left / Right weapon switch, C holster, F1 whistle, N night vision, Up / Down / wheel for options and the ammo list; Tab only for the backpack (I is the web's quest log)",
+   "evidence": "real-key Studio run: held / gun / ammo attributes after each key"
+  },
+  {
+   "system": "photo mode",
+   "result": "P (no view open): free camera WASD / Q / E / Shift x4, mouse look 4.5, wheel FOV 5-60, RMB focus marker, Space capture (punch + shutter, 0.3 s lock), O instructions, K hint; HUD hidden; P / the Roblox menu leave it and restore the camera",
+   "evidence": "real-key Studio run: camera moved under W, HUD disabled with the instruction panel shown, restored on P",
+   "note": "adaptations: the shared server keeps running (the web pauses time); photos go to the player's Roblox captures (CaptureService)"
   }
  ],
  "open": [
@@ -183,6 +228,15 @@
   {
    "gap": "drone hacking (Takeover.ts): needs HackSkillLevel >= 2 (bunker perk tree) and a hacker device, neither reachable in a raid-only slice",
    "next": "port with the base slice"
+  },
+  {
+   "gap": "the quest log (I) and quest tracker / objective toasts, Strong / ItemUnlock notifications",
+   "cause": "base-game systems (quests, unlocks) are outside the Ground Zero slice",
+   "next": "port with the base / quest slice"
+  },
+  {
+   "gap": "web audio cues are synth tones; the port uses Creator Store clips (kill 73943243843673, death 9113480917, use 139673383893208, shotgun 136216209294970, throw 125346857027000, whistle 131977562833235)",
+   "next": "replace with owned / licensed SFX before publishing (with the other community audio ids)"
   }
  ]
 }

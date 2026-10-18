@@ -68,6 +68,10 @@ for row in list(tables.values()) + list(loot['types'].values()):
 for p in pools.values():
     for iid, _ in p:
         need.add(iid)
+# Ground Zero's loose item spawners (data.ts LOOSE_SPAWNERS: draws at distinct points, leftover probability = nothing)
+for g in loot.get('loose', []):
+    for iid, _ in g['pool']:
+        need.add(iid)
 bodies = {}
 for k in ('scrapper', 'scav', 'brute', 'scrapper_rifle', 'contractor', 'boss', 'wolf', 'bloater', 'drone', 'stormling'):
     if k in loot['bodies']:
@@ -102,7 +106,7 @@ for iid in list(need):
     if f and f.get('ammo'):
         need.add(f['ammo'])
 
-KEEP = ('id', 'name', 'kind', 'cat', 'weight', 'value', 'maxStack', 'q', 'color', 'desc')
+KEEP = ('id', 'name', 'kind', 'cat', 'weight', 'value', 'maxStack', 'q', 'color', 'desc', 'typeID')
 out_items = {}
 for iid in sorted(need):
     it = items.get(iid)
@@ -124,6 +128,7 @@ L.append('M.types = ' + lua(loot['types']))
 L.append('M.pools = ' + lua(pools))
 L.append('M.bodies = ' + lua(bodies))
 L.append('M.throw = ' + lua(throw))
+L.append('M.loose = ' + lua(loot.get('loose', [])))
 # gz_holdpose.json muzzle: the gun agent's Muzzle socket (agent frame on the hand socket: x right, y up, z forward)
 hold = json.load(open(os.path.join(GZ, 'gz_holdpose.json')))
 ENEMY_GUN_KEYS = {'egun_spider': 'Item_EnemyGun_Spider_Rifle', 'egun_storm': 'Item_EGun_AR_Storm_NoGraphic', 'egun_ring': 'Item_EGun_Magic_Ring_Mushroom'}
@@ -135,6 +140,24 @@ for gid in list(guns):
 L.append('M.muzzle = ' + lua(muzzle))
 L.append('M.holdModels = ' + lua(hold['models']))
 L.append('M.throwPhysics = ' + lua(throw_rows['physics']))
+# gun attachments (src/game/data.ts GUN_SLOTS / PARTS / partFits; gunFeel part mods: [field, type 0 add / 100 pct / else
+# mul, value]) for the guns and parts we ship
+attach = json.load(open(os.path.join(GZ, 'gz_attach.json')))
+feel_parts = json.load(open(os.path.join(GZ, 'gz_gunfeel.json')))['parts']
+L.append('M.gunSlots = ' + lua({g: attach['slots'][g] for g in out_items if g in attach['slots']}))
+L.append('M.parts = ' + lua({pid: attach['parts'][pid]['tags'] for pid in out_items if pid in attach['parts']}))
+L.append('M.feelParts = ' + lua({pid: feel_parts[pid] for pid in out_items if pid in feel_parts}))
+L.append('M.partMods = ' + lua({pid: attach['parts'][pid]['mods'] for pid in out_items if pid in attach['parts']}))
+# Inventory.Sort metadata (src/game/inventory.ts sortMeta): Item.order and first tag per typeID, Tag.priority
+inv = json.load(open(os.path.join(GZ, 'gz_inventory.json')))
+sort_rows = {}
+for iid, it in out_items.items():
+    t = it.get('typeID')
+    m = inv['items'].get(str(t)) if t is not None else None
+    sort_rows[iid] = [m[0] if m else 0, m[1] if m else None]
+L.append('M.sortMeta = ' + lua(sort_rows))
+L.append('M.tagPriority = ' + lua({k: v for k, v in inv['tags'].items() if v}))
+L.append('M.basePocketSlots = 10')
 L.append('return M')
 open(os.path.join(OUT, 'Items.luau'), 'w').write('\n'.join(L) + '\n')
 print(json.dumps({'throw': sorted(throw), 'bodies': sorted(bodies), 'items': len(out_items), 'guns': sorted(guns), 'tables': len(tables), 'missing_tables': len(used_tables) - len(tables), 'pools': len(pools)}))

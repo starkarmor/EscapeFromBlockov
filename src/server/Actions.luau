@@ -35,7 +35,8 @@ local function melee(p: Player)
 	if not r or not r.alive or (r :: any).held ~= "melee" then
 		return
 	end
-	local m = Config.Melee[r.melee] or Config.Melee.stick
+	local mid = if r.eq.melee then (r.eq.melee :: any).id else "stick"
+	local m = Config.Melee[mid] or Config.Melee.stick
 	local now = os.clock()
 	if now - (lastSwing[p] or -math.huge) < (1 / m.attackSpeed) * 0.85 then
 		return
@@ -71,7 +72,7 @@ local function melee(p: Player)
 			if inFront or dist <= 0.5 + t.radius then
 				local crit = math.random() < m.critRate
 				local dmg = m.damage * (if crit then m.critMul else 1)
-				local killed = t.hurt(dmg, { from = p, crit = crit, weaponId = rr.melee, fromName = p.DisplayName })
+				local killed = t.hurt(dmg, { from = p, crit = crit, weaponId = mid, fromName = p.DisplayName })
 				Weapons.broadcastHit(t, tp + Vector3.new(0, 0.7, 0), dmg, crit, killed, p, false)
 			end
 		end
@@ -87,6 +88,15 @@ local function useItem(p: Player, id: any)
 	if not def or not def.use or Raid.count(r.bag, id) <= 0 then
 		return
 	end
+	-- Player.usable: energy / hydration / buff items always; heals below max HP; bandages while bleeding; else "Not usable"
+	local u = def.use
+	local ok = (u.energy or u.hydration or u.buff) ~= nil
+		or (u.heal ~= nil and u.heal > 0 and r.hp < r.maxHp)
+		or (u.bleedStacks ~= nil and ((r :: any).bleed or 0) > 0)
+	if not ok then
+		Net.event("Toast"):FireClient(p, "Not usable", "info")
+		return
+	end
 	local t = def.use.useTime or 1
 	local now = Workspace:GetServerTimeNow()
 	using[p] = { id = id, at = os.clock(), done = os.clock() + t }
@@ -95,6 +105,11 @@ local function useItem(p: Player, id: any)
 	p:SetAttribute("UseUntil", now + t)
 	Weapons.cancelReload(p)
 end
+
+Actions.useItem = useItem
+
+--- the held slot follows equipment changes (InventoryUI.equipFrom / unequip: Player.switchTo)
+Actions.setHeld = setHeld
 
 function Actions.cancelUse(p: Player)
 	if using[p] then
@@ -174,95 +189,38 @@ function Actions.start()
 			end
 			return
 		end
-		if slot == "gun" or slot == "gun2" or slot == "melee" then
+		if slot == "gun" or slot == "gun2" or slot == "melee" or slot == "none" then
 			Actions.cancelUse(p)
 			setHeld(p, slot)
 			if p.Character then
-				p.Character:SetAttribute("Held", if slot == "melee" then "melee" else "gun")
+				p.Character:SetAttribute("Held", if slot == "melee" then "melee" elseif slot == "none" then "none" else "gun")
 			end
 			Weapons.syncAmmo(p)
 		end
 	end)
-	Net.event("Equip").OnServerEvent:Connect(function(p, index)
-		local r = Raid.raids[p]
-		if not r or not r.alive or typeof(index) ~= "number" then
-			return
-		end
-		local x = r :: any
-		local st = r.bag[index]
-		if not st then
-			return
-		end
-		local def = Items.items[st.id]
-		if not def then
-			return
-		end
-		local function take()
-			Raid.take(r.bag, st.id, 1)
-		end
-		if def.kind == "firearm" then
-			take()
-			local inst = { id = st.id, ammo = 0, dur = 100 }
-			if not r.gun then
-				r.gun = inst
-			elseif not x.gun2 then
-				x.gun2 = inst
-			else
-				local slot = if x.held == "gun2" then "gun2" else "gun"
-				local old = if slot == "gun2" then x.gun2 else r.gun
-				Raid.addItem(r.bag, old.id, 1)
-				if old.ammo > 0 then
-					Raid.addItem(r.bag, require(ReplicatedStorage.Shared.Guns).ammoOf(old.id) or "ammo_s_rusty", old.ammo)
-				end
-				if slot == "gun2" then x.gun2 = inst else r.gun = inst end
-			end
-		elseif def.kind == "armor" or def.kind == "helmet" then
-			take()
-			local key = def.kind
-			if x[key] then
-				Raid.addItem(r.bag, x[key].id, 1)
-			end
-			local g = def.gear or {}
-			x[key] = { id = st.id, armor = g.armor or g.headArmor or 0, dur = g.dur or 50 }
-		elseif def.kind == "melee" then
-			take()
-			Raid.addItem(r.bag, r.melee, 1)
-			r.melee = st.id
-		elseif def.use then
-			useItem(p, st.id)
-			return
-		else
-			return
-		end
-		Weapons.cancelReload(p)
-		Raid.syncVitals(p)
-		Raid.sendBag(p)
-		Weapons.syncAmmo(p)
-		Net.event("Toast"):FireClient(p, "Equipped " .. (def.name or st.id), "good")
-	end)
-	Net.event("Unequip").OnServerEvent:Connect(function(p, slot)
+	-- Key N (World.toggleNightVision): the face goggles on / off; "No night vision" without them
+	Net.event("NightVision").OnServerEvent:Connect(function(p)
 		local r = Raid.raids[p]
 		if not r or not r.alive then
 			return
 		end
+		local _, _, toggled = Raid.nightVision(r)
+		if not toggled then
+			Net.event("Toast"):FireClient(p, "No night vision", "info")
+			return
+		end
 		local x = r :: any
-		local key = if slot == "gun" or slot == "gun2" or slot == "armor" or slot == "helmet" then slot else nil
-		if not key then
-			return
-		end
-		local inst = if key == "gun" then r.gun else x[key]
-		if not inst then
-			return
-		end
-		Raid.addItem(r.bag, inst.id, 1)
-		if inst.ammo and inst.ammo > 0 then
-			Raid.addItem(r.bag, require(ReplicatedStorage.Shared.Guns).ammoOf(inst.id) or "ammo_s_rusty", inst.ammo)
-		end
-		if key == "gun" then r.gun = nil else x[key] = nil end
-		Weapons.cancelReload(p)
+		x.nvgOn = x.nvgOn == false
+		Net.event("Toast"):FireClient(p, if x.nvgOn then "Night vision on" else "Night vision off", "info")
 		Raid.syncVitals(p)
-		Raid.sendBag(p)
-		Weapons.syncAmmo(p)
+	end)
+	-- the whistle: an AI noise of radius 15 at the character (World.whistle -> noise), no cooldown
+	Net.event("Whistle").OnServerEvent:Connect(function(p)
+		local pos = Raid.posOf(p)
+		local r = Raid.raids[p]
+		if pos and r and r.alive then
+			require(script.Parent.Enemies).hear(pos.X, pos.Z, 15, 0, 0)
+		end
 	end)
 	Net.event("Melee").OnServerEvent:Connect(function(p)
 		-- a melee swing (priority 2) stops a reload (priority 1)

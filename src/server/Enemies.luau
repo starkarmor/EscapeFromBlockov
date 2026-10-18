@@ -659,7 +659,8 @@ local function shootOnce(e: Enemy)
 		})
 	end
 	for _, pl in Players:GetPlayers() do
-		Net.event("Fx"):FireClient(pl, "shot", mz, yaws, slope, row.BulletSpeed * e.def.bulletSpeedMul, range)
+		-- World.fireEnemy muzzleFlash colour: the bloater's ring shots #b8f060, every other gun #ffb36b
+		Net.event("Fx"):FireClient(pl, "shot", mz, yaws, slope, row.BulletSpeed * e.def.bulletSpeedMul, range, if e.gun == "egun_ring" then "#b8f060" else "#ffb36b")
 	end
 	-- AI gunfire is heard by every other team (World.ts: hear type 1)
 	Enemies.hear(mz.X, mz.Z, row.SoundRange or 20, 1, e.team)

@@ -18,11 +18,12 @@ local Guns = require(Shared.Guns)
 local MapData = require(Shared.MapData)
 local Avatar = require(script.Parent.Avatar)
 local Weapons = require(script.Parent.Weapons)
+local Inv = require(Shared.Inv)
 
 local S = Units.S
 local Raid = {}
 
-export type Stack = { id: string, n: number }
+export type Stack = Inv.Inst
 export type Profile = {
 	stash: { Stack },
 	money: number,
@@ -36,9 +37,14 @@ export type RaidState = {
 	maxHp: number,
 	energy: number,
 	water: number,
-	gun: { id: string, ammo: number, dur: number }?,
-	melee: string,
+	-- Profile.ts Equipment: firearm1 firearm2 melee head body face headset backpack totem1 totem2 -> Inst
+	eq: { [string]: Stack? },
+	-- the backpack: positional Insts (src/shared/Inv.luau)
 	bag: { Stack },
+	-- hotbar shortcuts 3..8: item ids ("" = empty); locks (Inventory.lockedIndexes); wishlist ids
+	hotbar: { string },
+	locks: { number },
+	wish: { string },
 	alive: boolean,
 	inRaid: boolean,
 	dodgeAt: number,
@@ -63,16 +69,21 @@ charFolder.Parent = Workspace
 local raidStart = os.clock()
 
 -- the starting kit (Profile.ts defaultProfile + the guide starter boxes)
-local function starterKit(): (any, { Stack })
-	local gun = { id = "tt33", ammo = 8, dur = 100 }
-	local bag = {
-		{ id = "ammo_s_rusty", n = 30 },
-		{ id = "bandage", n = 3 },
-		{ id = "aspirin", n = 1 },
-		{ id = "carrot", n = 1 },
-		{ id = "cocoa", n = 1 },
+local function starterKit(): ({ [string]: Stack? }, { Stack })
+	local eq: { [string]: Stack? } = { firearm1 = { id = "tt33", n = 1, ammo = 8, dur = 100, loaded = "ammo_s_rusty" }, melee = { id = "stick", n = 1 } }
+	local bag: { Stack } = {
+		{ id = "ammo_s_rusty", n = 30, pos = 0 },
+		{ id = "bandage", n = 3, pos = 1 },
+		{ id = "aspirin", n = 1, pos = 2 },
+		{ id = "carrot", n = 1, pos = 3 },
+		{ id = "cocoa", n = 1, pos = 4 },
 	}
-	return gun, bag
+	return eq, bag
+end
+
+--- the backpack capacity (Profile.bagCapacity: 10 + backpack + body armor slots)
+function Raid.cap(r: RaidState): number
+	return Inv.bagCapacity(r.eq)
 end
 
 local function loadProfile(p: Player): Profile
@@ -108,53 +119,62 @@ local function saveProfile(p: Player)
 	end)
 end
 
--- backpack helpers (stacks honour maxStack)
-function Raid.addItem(bag: { Stack }, id: string, n: number): number
-	local it = Guns.items[id]
-	local max = (it and it.maxStack) or 1
-	local left = n
-	for _, s in bag do
-		if s.id == id and s.n < max then
-			local k = math.min(max - s.n, left)
-			s.n += k
-			left -= k
-			if left <= 0 then
-				return n
-			end
-		end
-	end
-	while left > 0 do
-		local k = math.min(max, left)
-		table.insert(bag, { id = id, n = k })
-		left -= k
-	end
-	return n
+-- backpack helpers (Profile.addItem / countItem / removeItem on positional lists); `cap` defaults to unlimited
+-- (the warehouse, corpse lists). Returns the count added.
+function Raid.addItem(bag: { Stack }, id: string, n: number, cap: number?): number
+	return n - Inv.addItem(bag, id, n, cap or 100000)
 end
 
 function Raid.count(bag: { Stack }, id: string): number
-	local c = 0
-	for _, s in bag do
-		if s.id == id then
-			c += s.n
-		end
-	end
-	return c
+	return Inv.count(bag, id)
 end
 
 function Raid.take(bag: { Stack }, id: string, n: number): number
-	local taken = 0
-	for i = #bag, 1, -1 do
-		local s = bag[i]
-		if s.id == id and taken < n then
-			local k = math.min(s.n, n - taken)
-			s.n -= k
-			taken += k
-			if s.n <= 0 then
-				table.remove(bag, i)
+	return Inv.remove(bag, id, n)
+end
+
+-- data.ts NIGHT_VISION (face goggles toggle with N; head lamps always on) and NIGHT.flashlight (+0.3 from a light on the
+-- held gun)
+local NIGHT_VISION = {
+	night_vision_goggles = { ability = 1, type = 1, toggle = true },
+	thermal_vision_goggles = { ability = 1, type = 2, toggle = true },
+	head_lantern = { ability = 0.25, type = 0, toggle = false },
+	helmet_storm = { ability = 0.3, type = 0, toggle = false },
+	helmat_pumpkin_light = { ability = 0.4, type = 0, toggle = false },
+}
+local FLASHLIGHT_PARTS = { tec_flashlight_non_1 = true }
+
+--- Player.nightVision(nvgOn): ability, type, and whether the face item is a toggled goggle
+function Raid.nightVision(r: RaidState): (number, number, boolean)
+	local ability, kind = 0, 0
+	local face = r.eq.face and NIGHT_VISION[r.eq.face.id]
+	local on = (r :: any).nvgOn ~= false
+	if face and (not face.toggle or on) then
+		ability += face.ability
+		kind = face.type
+	end
+	local head = r.eq.head and NIGHT_VISION[r.eq.head.id]
+	if head then
+		ability += head.ability
+	end
+	local x = r :: any
+	local g = if x.held == "gun2" then r.eq.firearm2 elseif x.held == "gun" or x.held == nil then r.eq.firearm1 else nil
+	if g and g.att then
+		for _, id in g.att do
+			if FLASHLIGHT_PARTS[id] then
+				ability += 0.3
+				break
 			end
 		end
 	end
-	return taken
+	return ability, kind, face ~= nil and face.toggle
+end
+
+--- the armor value of worn gear (GEAR armor / headArmor)
+local function armorOf(inst: Stack?): number
+	local d = inst and Guns.items[inst.id]
+	local g = d and d.gear
+	return (g and (g.armor or g.headArmor)) or 0
 end
 
 local function syncVitals(p: Player)
@@ -168,26 +188,26 @@ local function syncVitals(p: Player)
 	p:SetAttribute("Water", r.water)
 	p:SetAttribute("Alive", r.alive)
 	local w = 0
-	if r.gun and Guns.items[r.gun.id] then
-		w += Guns.items[r.gun.id].weight or 0
-	end
-	if Guns.items[r.melee] then
-		w += Guns.items[r.melee].weight or 0
-	end
-	for _, k in { "gun2", "armor", "helmet" } do
-		local inst = (r :: any)[k]
-		if inst and Guns.items[inst.id] then
-			w += Guns.items[inst.id].weight or 0
-		end
+	for _, inst in r.eq do
+		local def = Guns.items[inst.id]
+		w += (def and def.weight or 0) * inst.n
 	end
 	for _, s in r.bag do
 		local def = Guns.items[s.id]
 		w += (def and def.weight or 0) * s.n
 	end
-	p:SetAttribute("Load", w / Config.Weight.carry)
-	local xa = r :: any
-	p:SetAttribute("ArmorDur", xa.armor and xa.armor.dur or nil)
-	p:SetAttribute("HelmetDur", xa.helmet and xa.helmet.dur or nil)
+	local carry = Config.Weight.carry + Inv.carryBonus(r.eq)
+	p:SetAttribute("Load", w / carry)
+	p:SetAttribute("Carry", carry)
+	-- GEAR hearing (headphones +30 %): widens the footstep pings (World: hearR = 9 x (1 + hearing x 1.5))
+	local hs = r.eq.headset and Guns.items[r.eq.headset.id]
+	p:SetAttribute("Hearing", (hs and hs.gear and hs.gear.hearing) or 0)
+	-- World.updateVision: the night-vision ability lifts the night view factors; the goggles' tint while on
+	local nv, nvType, toggled = Raid.nightVision(r)
+	p:SetAttribute("NightVision", math.clamp(nv, 0, 1))
+	p:SetAttribute("NvgView", if toggled and (r :: any).nvgOn ~= false then nvType else nil)
+	p:SetAttribute("ArmorDur", r.eq.body and r.eq.body.dur or nil)
+	p:SetAttribute("HelmetDur", r.eq.head and r.eq.head.dur or nil)
 	p:SetAttribute("Weight", w)
 	p:SetAttribute("InRaid", r.inRaid)
 end
@@ -197,9 +217,14 @@ function Raid.sendBag(p: Player)
 	local r = raids[p]
 	-- worn equipment for the inventory screen
 	if r then
-		local x = r :: any
+		local e = r.eq
+		local function id(k: string): string
+			return if e[k] then (e[k] :: Stack).id else ""
+		end
 		p:SetAttribute("Equip", string.format("gun=%s,gun2=%s,melee=%s,armor=%s,helmet=%s",
-			r.gun and r.gun.id or "", x.gun2 and x.gun2.id or "", r.melee or "", x.armor and x.armor.id or "", x.helmet and x.helmet.id or ""))
+			id("firearm1"), id("firearm2"), id("melee"), id("body"), id("head")))
+		p:SetAttribute("Hotbar", table.concat(r.hotbar, ","))
+		syncVitals(p)
 	end
 	-- the hotbar reads the backpack from this attribute (id:count pairs)
 	local parts = {}
@@ -207,7 +232,12 @@ function Raid.sendBag(p: Player)
 		table.insert(parts, s.id .. ":" .. s.n)
 	end
 	p:SetAttribute("Bag", table.concat(parts, ","))
+	-- the LootView's full state (server/Inventory.luau)
+	if Raid.onInv then
+		Raid.onInv(p)
+	end
 end
+Raid.onInv = nil :: ((Player) -> ())?
 
 local function rootOf(p: Player): BasePart?
 	local c = p.Character
@@ -241,16 +271,18 @@ function Raid.deploy(p: Player)
 	if not prof then
 		return
 	end
-	local gun, bag = starterKit()
+	local eq, bag = starterKit()
 	require(script.Parent.Weather).begin((prof :: any).clock, (prof :: any).weatherSeed)
 	local r: RaidState = {
 		hp = Config.Body.maxHp,
 		maxHp = Config.Body.maxHp,
 		energy = 50,
 		water = 50,
-		gun = gun,
-		melee = "stick",
+		eq = eq,
 		bag = bag,
+		hotbar = { "bandage", "", "", "", "", "" },
+		locks = {},
+		wish = {},
 		alive = true,
 		inRaid = true,
 		dodgeAt = -math.huge,
@@ -366,13 +398,22 @@ function Raid.hurt(p: Player, dmg: number, info: any): boolean
 		(r :: any).lastKill = { name = info.fromName, weaponId = info.weaponId, crit = info.crit, explosion = info.explosion, self = info.from == p }
 	end
 	-- armorMultiplier (Player.ts): dmg x 2 / (clamp(armor - pen, 0, 999) + 2); a crit hits the helmet, else the body armor
-	local x = r :: any
-	local worn = if info and info.crit then x.helmet else x.armor
-	if worn and (worn.dur or 0) > 0 and (worn.armor or 0) > 0 and not (info and info.direct) then
-		dmg *= 2 / (math.clamp(worn.armor - ((info and info.pen) or 0), 0, 999) + 2)
+	local worn = if info and info.crit then r.eq.head else r.eq.body
+	local av = armorOf(worn)
+	if worn and (worn.dur or 0) > 0 and av > 0 and not (info and info.direct) then
+		dmg *= 2 / (math.clamp(av - ((info and info.pen) or 0), 0, 999) + 2)
 		worn.dur = math.max(0, worn.dur - ((info and info.armorBreak) or 0.55))
 	end
 	r.hp = math.max(0, r.hp - dmg)
+	-- World: damage over time (bleed, starvation, storm) shows its number over the player at 3.2 m (WorldUI 'tick');
+	-- a hazard's hit (playerHurt) shows the number and the orange flash, without blood
+	if info and info.tick then
+		Net.event("Fx"):FireClient(p, "tick", dmg)
+	elseif info and info.hazard then
+		for _, other in Players:GetPlayers() do
+			Net.event("Fx"):FireClient(other, "phurt", p.Character, dmg, other == p)
+		end
+	end
 	if info and info.bleed and math.random() < info.bleed then
 		Raid.addBleed(p)
 	end
@@ -442,21 +483,20 @@ function Raid.die(p: Player, info: any)
 	local pos = Raid.posOf(p)
 	-- splitOnDeath (deathKeep.ts): everything goes to the body except the kept melee slot
 	local loot: { Stack } = {}
-	if r.gun then
-		table.insert(loot, { id = r.gun.id, n = 1 })
-		if r.gun.ammo > 0 then
-			Raid.addItem(loot, Guns.ammoOf(r.gun.id) or "ammo_s_rusty", r.gun.ammo)
-		end
-	end
-	local x = r :: any
-	for _, k in { "gun2", "armor", "helmet" } do
-		if x[k] then
-			table.insert(loot, { id = x[k].id, n = 1 })
+	for _, k in Inv.EQUIP_SLOTS do
+		local inst = r.eq[k]
+		if inst and k ~= "melee" then
+			local c = table.clone(inst)
+			c.pos = nil
+			table.insert(loot, c)
 		end
 	end
 	for _, s in r.bag do
-		table.insert(loot, { id = s.id, n = s.n })
+		local c = table.clone(s)
+		c.pos = nil
+		table.insert(loot, c)
 	end
+	local x = r :: any
 	Weapons.targets[p] = nil
 	Weapons.cancelReload(p)
 	syncVitals(p)
@@ -508,15 +548,11 @@ function Raid.extract(p: Player)
 			Raid.addItem(prof.stash, s.id, s.n)
 			table.insert(banked, s)
 		end
-		if r.gun then
-			Raid.addItem(prof.stash, r.gun.id, 1)
-			table.insert(banked, { id = r.gun.id, n = 1 })
-		end
-		local x = r :: any
-		for _, k in { "gun2", "armor", "helmet" } do
-			if x[k] then
-				Raid.addItem(prof.stash, x[k].id, 1)
-				table.insert(banked, { id = x[k].id, n = 1 })
+		for _, k in Inv.EQUIP_SLOTS do
+			local inst = r.eq[k]
+			if inst then
+				Raid.addItem(prof.stash, inst.id, 1)
+				table.insert(banked, { id = inst.id, n = 1 })
 			end
 		end
 	end
@@ -541,14 +577,14 @@ local function drains(p: Player, r: RaidState, dt: number)
 	x.starveT = (x.starveT or 0) + dt
 	if r.energy <= 0 and x.starveT >= 2 then
 		x.starveT = 0
-		Raid.hurt(p, 1, { fromName = "Starvation", direct = true })
+		Raid.hurt(p, 1, { fromName = "Starvation", direct = true, tick = true })
 	end
 	if (x.bleed or 0) > 0 then
 		x.bleedLeft = (x.bleedLeft or 25) - dt
 		x.bleedT = (x.bleedT or 0) + dt
 		if x.bleedT >= 1.5 then
 			x.bleedT = 0
-			Raid.hurt(p, x.bleed, { fromName = "Bleeding", direct = true })
+			Raid.hurt(p, x.bleed, { fromName = "Bleeding", direct = true, tick = true })
 		end
 		if x.bleedLeft <= 0 then
 			x.bleed = 0
@@ -604,9 +640,6 @@ local function tick(dt: number)
 			end
 		end
 		if inPad then
-			if r.extractT == 0 then
-				Net.event("Toast"):FireClient(p, "Extracting...", "good")
-			end
 			r.extractT += dt
 			p:SetAttribute("ExtractLeft", math.max(0, Config.Extract.time - r.extractT))
 			if r.extractT >= Config.Extract.time then
@@ -614,9 +647,12 @@ local function tick(dt: number)
 				Raid.extract(p)
 			end
 		elseif r.extractT > 0 then
+			-- World: leaving the zone resets the countdown; "Extraction cancelled" only past 0.5 s
+			if r.extractT > 0.5 then
+				Net.event("Toast"):FireClient(p, "Extraction cancelled", "bad")
+			end
 			r.extractT = 0
 			p:SetAttribute("ExtractLeft", nil)
-			Net.event("Toast"):FireClient(p, "Extraction cancelled", "bad")
 		end
 	end
 end
@@ -630,11 +666,11 @@ function Raid.start()
 		end
 		local x = r :: any
 		if x.held == "gun2" then
-			return x.gun2
-		elseif x.held == "melee" then
+			return r.eq.firearm2
+		elseif x.held == "melee" or x.held == "none" or x.held == "throw" then
 			return nil
 		end
-		return r.gun
+		return r.eq.firearm1
 	end
 	Weapons.countAmmo = function(p, id)
 		local r = raids[p]
@@ -647,6 +683,12 @@ function Raid.start()
 		end
 		local k = Raid.take(r.bag, id, n)
 		return k
+	end
+	Weapons.giveAmmo = function(p, id, n)
+		local r = raids[p]
+		if r then
+			Raid.addItem(r.bag, id, n, Raid.cap(r))
+		end
 	end
 	Weapons.onBag = Raid.sendBag
 	Weapons.busy = function(p)
@@ -691,7 +733,7 @@ function Raid.start()
 				if typeof(v) == "string" and r then
 					local id, n = string.match(v, "([^:]+):(%d+)")
 					if id then
-						Raid.addItem(r.bag, id, tonumber(n) or 1)
+						Raid.addItem(r.bag, id, tonumber(n) or 1, Raid.cap(r))
 						Raid.sendBag(p)
 					end
 				end

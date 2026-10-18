@@ -137,6 +137,8 @@ function Throw.update(dt: number, lmb: boolean)
 	if not lmb and wasHeld and aimT >= 0 then
 		if aimT >= row.readyTime then
 			Net.event("Throw"):FireServer(id, PC.aim)
+			-- World.handleThrow: audio 'melee' (the swing whoosh)
+			require(script.Parent.Sfx).play("throw")
 			cd = 0.5
 		end
 		aimT = -1

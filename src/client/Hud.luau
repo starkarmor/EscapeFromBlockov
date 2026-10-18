@@ -185,6 +185,7 @@ local function build()
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) }, hint)
 	text(hint, "Controls", 28)
 	keycap(hint, "O", 38.5)
+	R.hint = hint
 	local panel = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -25, 0, 168.5), Size = UDim2.fromOffset(0, 0), AutomaticSize = Enum.AutomaticSize.XY, Visible = false }, root)
 	new("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, panel)
 	for i, row in { { "WASD", "Move" }, { "Shift", "Run" }, { "Space", "Dodge" }, { "LMB", "Shoot" }, { "RMB", "Aim" }, { "R", "Reload" }, { "F", "Interact" }, { "Tab", "Backpack" }, { "1 2 V", "Weapons" }, { "3-8", "Items" }, { "X", "Cancel" } } do
@@ -224,11 +225,19 @@ local function build()
 	R.hpTrack, R.hpLag, R.hpFill, R.hpText = track, lag, fill, hpText
 	R.hpScale = new("UIScale", { Scale = 1 }, track)
 
-	-- armor (ours: helmet / vest durability above the HP pill)
-	local arm = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0.5, -854, 1, -112), Size = UDim2.fromOffset(260, 60) }, dim)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 40) }, arm)
-	R.armHelmet = text(arm, "⛑ -", 22)
-	R.armVest = text(arm, "🦺 -", 22)
+	-- #armor (left centre - 854, bottom 112, 260 wide, gap 40): .arm = a 34 helmet / vest icon #e9ecee over "cur/max" 17;
+	-- .none (nothing worn) the icon rgba(255,141,141,.85) and no text; .broken (0 durability) the icon #8c8f92
+	local arm = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0.5, -854, 1, -112), Size = UDim2.fromOffset(260, 54) }, dim)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Bottom, Padding = UDim.new(0, 40) }, arm)
+	local function armBox(glyphName: string, order: number): (ImageLabel, TextLabel)
+		local b = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(60, 54), LayoutOrder = order }, arm)
+		local ic = new("ImageLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.fromOffset(34, 34) }, b)
+		require(script.Parent.Icon).glyph(ic, glyphName)
+		local t = text(b, "", 17, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 34), Size = UDim2.fromOffset(60, 20), TextXAlignment = Enum.TextXAlignment.Center })
+		return ic, t
+	end
+	R.armHelmetIc, R.armHelmet = armBox("arm_head", 1)
+	R.armVestIc, R.armVest = armBox("arm_body", 2)
 
 	-- water / energy rings (100x100 at centre - 533.6 / - 419, bottom 53.6): dark ring 16, white fill 6, ccw, glow colour
 	R.rings = {}
@@ -252,15 +261,13 @@ local function build()
 		local b = box(wb, Vector2.new(spec[1], spec[1]), INK, 0.455, 32)
 		b.LayoutOrder = i
 		local sel = new("UIStroke", { Thickness = 4, Color = Color3.fromHex("#ffece1"), Enabled = false }, b)
-		local vp = new("ViewportFrame", { BackgroundTransparency = 1, Size = UDim2.fromScale(0.94, 0.94), Position = UDim2.fromScale(0.03, 0.03), Ambient = Color3.new(0.9, 0.9, 0.9), LightColor = WHITE }, b)
-		local cam = new("Camera", { FieldOfView = 30 }, vp)
-		vp.CurrentCamera = cam
+		local icon = new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.new(0.9, 0, 0.7, 0), Position = UDim2.fromScale(0.05, 0.08), Visible = false }, b)
 		local name = text(b, "", 18, { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.new(1, -8, 0, 22), Position = UDim2.new(0, 4, 1, -26), TextScaled = true })
 		local kc = keycap(b, spec[2])
 		kc.AnchorPoint = Vector2.new(0.5, 0)
 		kc.Position = UDim2.new(0.5, 0, 1, 8.8)
 		local punch = new("UIScale", { Scale = 1 }, b)
-		R.weapons[i] = { frame = b, sel = sel, vp = vp, cam = cam, name = name, id = "", punch = punch }
+		R.weapons[i] = { frame = b, sel = sel, icon = icon, name = name, id = "", punch = punch }
 	end
 
 	-- hotbar (starts at centre + 75, gap 20, 100x100 slots, bottom 50, keys 3-8)
@@ -303,9 +310,16 @@ local function build()
 	text(cnt, "/", 18, { FontFace = DIGITS, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4) })
 	local cR = text(cnt, "30", 18, { FontFace = DIGITS, Position = UDim2.new(0.5, 8, 0, 4) })
 	R.ammo, R.ammoType, R.ammoTypeT, R.ammoCount, R.ammoA, R.ammoR = ammo, typ, typT, cnt, cA, cR
+	-- the SelectList over the type pill while BulletTypeHUD's list is open: one pill per entry (name + count), the
+	-- selected one white
+	R.blist = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(0, -80),
+		Size = UDim2.fromOffset(0, 0), AutomaticSize = Enum.AutomaticSize.XY, Visible = false }, ammo)
+	new("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, R.blist)
 
 	-- distance pill (right 30.8, bottom 52.2, 166.5x50.6)
 	local mk = box(root, Vector2.new(166.5, 50.6), INK, 0.788, 999)
+	R.marker = mk
 	mk.AnchorPoint = Vector2.new(1, 1)
 	mk.Position = UDim2.new(1, -30.8, 1, -52.2)
 	local mi = text(mk, "◎", 34, { Position = UDim2.fromOffset(15.3, 4) })
@@ -427,15 +441,12 @@ local toastQ: { string } = {}
 local toastT, toastPhase = 0, "idle"
 type Num = { lbl: TextLabel, pos: Vector3, v: Vector3, t: number, crit: boolean }
 local nums: { Num } = {}
-type Snd = { f: Frame, t: number }
+type Snd = { f: GuiObject, t: number, at: Vector3? }
 local snds: { Snd } = {}
 local coverParams = RaycastParams.new()
 coverParams.CollisionGroup = "QBullet"
 
 local hotbar: { string } = {}
-function Hud.hotbarItem(i: number): string?
-	return hotbar[i]
-end
 
 local function bagStacks(): { { id: string, n: number } }
 	local out = {}
@@ -455,6 +466,21 @@ local function bagStacks(): { { id: string, n: number } }
 		table.insert(out, { id = id, n = counts[id] })
 	end
 	return out
+end
+
+--- the id bound to hotbar slot i (nil when empty) and how many the backpack holds
+function Hud.hotbarItem(i: number): (string?, number)
+	local id = hotbar[i]
+	if not id or id == "" then
+		return nil, 0
+	end
+	local n = 0
+	for _, st in bagStacks() do
+		if st.id == id then
+			n += st.n
+		end
+	end
+	return id, n
 end
 
 local function equip(): { [string]: string }
@@ -563,14 +589,65 @@ function Hud.damageNumber(at: Vector3, dmg: number, crit: boolean)
 	st.Thickness = 2
 	st.Transparency = 0
 	new("UIScale", { Scale = 1.869 }, lbl)
-	local a = math.rad((math.random() - 0.5) * 20)
-	table.insert(nums, { lbl = lbl, pos = at + Vector3.new(0, 2, 0), v = Vector3.new(math.sin(a) * 6, math.cos(a) * 6, 0), t = 0, crit = crit })
+	-- WorldUI: 6 m/s within 10 degrees of straight up, toward a random side
+	local a = math.rad((math.random() - 0.5) * 2 * 10)
+	local side = math.random() * math.pi * 2
+	local v = Vector3.new(math.sin(a) * math.cos(side), math.cos(a), math.sin(a) * math.sin(side)) * 6
+	table.insert(nums, { lbl = lbl, pos = at + Vector3.new(0, 2, 0), v = v, t = 0, crit = crit })
 end
 
 --- sound marker: an arc on a 400 px ring around the screen centre toward an unseen shot (1.5 s)
-function Hud.soundMarker(at: Vector3)
+-- WorldUI sound marker (.snd): a 120 circle drawing only its top border (6 px; #fff steps, #ffd0d0 shots), on the 400 px
+-- ring toward the sound, unrotated; 0.1 s fade in, then fades over its 1.5 s life; a marker within 1.5 m of a fresh one
+-- (past half its life left) is skipped
+local arcImg: any = nil
+local function arc(): any
+	if arcImg ~= nil then
+		return arcImg
+	end
+	arcImg = false
+	local ok, img = pcall(function()
+		return game:GetService("AssetService"):CreateEditableImage({ Size = Vector2.new(120, 120) })
+	end)
+	if not ok or not img then
+		return false
+	end
+	local px = buffer.create(120 * 120 * 4)
+	for y = 0, 119 do
+		for x = 0, 119 do
+			local cover = 0
+			for sy = 0, 1 do
+				for sx = 0, 1 do
+					local dx, dy = x + (sx + 0.5) / 2 - 60, y + (sy + 0.5) / 2 - 60
+					local r = math.sqrt(dx * dx + dy * dy)
+					local th = math.deg(math.atan2(math.abs(dx), -dy)) -- 0 at the top
+					-- border-top of a round box: full width over the top, tapering to nothing at the 45 deg corner joins
+					local w = if th <= 30 then 6 elseif th < 45 then 6 * (45 - th) / 15 else 0
+					if r <= 60 and r >= 60 - w then
+						cover += 1
+					end
+				end
+			end
+			local o = (y * 120 + x) * 4
+			buffer.writeu8(px, o, 255)
+			buffer.writeu8(px, o + 1, 255)
+			buffer.writeu8(px, o + 2, 255)
+			buffer.writeu8(px, o + 3, math.floor(cover / 4 * 255 + 0.5))
+		end
+	end
+	img:WritePixelsBuffer(Vector2.zero, Vector2.new(120, 120), px)
+	arcImg = img
+	return img
+end
+
+function Hud.soundMarker(at: Vector3, kind: string?)
 	if not R.wui then
 		return
+	end
+	for _, m in snds do
+		if m.at and (Vector2.new(m.at.X, m.at.Z) - Vector2.new(at.X, at.Z)).Magnitude < 1.5 and m.t < 0.75 then
+			return
+		end
 	end
 	local vp = Workspace.CurrentCamera.ViewportSize
 	local sp = toScreen(at)
@@ -580,11 +657,13 @@ function Hud.soundMarker(at: Vector3)
 		return
 	end
 	local p = centre + d.Unit * (400 * (vp.Y / 1080) / u)
-	local f = box(R.wui, Vector2.new(70, 6), Color3.fromHex("#ffd0d0"), 0, 999)
-	f.AnchorPoint = Vector2.new(0.5, 0.5)
-	f.Position = UDim2.fromOffset(p.X, p.Y)
-	f.Rotation = math.deg(math.atan2(d.Y, d.X)) + 90
-	table.insert(snds, { f = f, t = 0 })
+	local img = arc()
+	local f = new("ImageLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(120, 120),
+		Position = UDim2.fromOffset(p.X, p.Y), ImageColor3 = if kind == "step" then WHITE else Color3.fromHex("#ffd0d0"), ImageTransparency = 1 }, R.wui)
+	if img then
+		f.ImageContent = Content.fromObject(img)
+	end
+	table.insert(snds, { f = f, t = 0, at = at })
 end
 
 local function hitMarker(kill: boolean, crit: boolean)
@@ -613,11 +692,15 @@ end
 local HM = { { 0, 80, 0.65 }, { 0.1, 30, 1 }, { 0.66, 65, 0 }, { 1, 80, 0 } }
 local HMK = { { 0, 100, 1 }, { 0.06, 30, 1 }, { 0.29, 25, 1 }, { 0.74, 50, 0 }, { 1, 50, 0 } }
 
-local STATUS_GOOD = { Agile = true }
-local function setStatuses(list: { { name: string, sub: string? } })
+-- .st rows (#statuses, bottom-left, column-reverse, gap 10): a 50 pill (pad 2 / 15, #000 .745, shadow), a 40 icon (white,
+-- .bad #ff8d8d) with its layers badge, the name 22 and the seconds 20; every rebuild pops in (st-in: scale .2 -> 1 with
+-- the cubic-bezier(.2, 1.6, .5, 1) overshoot, 0.2 s)
+type Status = { icon: string, name: string, bad: boolean, layers: number?, secs: number? }
+local statusPops: { { s: UIScale, g: CanvasGroup, t: number } } = {}
+local function setStatuses(list: { Status })
 	local key = ""
 	for _, s in list do
-		key ..= s.name .. (s.sub or "") .. "|"
+		key ..= s.name .. "|" .. tostring(s.layers) .. "|" .. tostring(s.secs and math.ceil(s.secs)) .. ";"
 	end
 	if R.statusKey == key then
 		return
@@ -628,22 +711,90 @@ local function setStatuses(list: { { name: string, sub: string? } })
 			c:Destroy()
 		end
 	end
+	table.clear(statusPops)
+	local Icon = require(script.Parent.Icon)
 	for i, s in list do
-		local p = box(R.statuses, Vector2.new(0, 50), INK, 0.745, 999)
+		local g = new("CanvasGroup", { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 50), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = -i, GroupTransparency = 1 }, R.statuses)
+		local p = box(g, Vector2.new(0, 50), INK, 0.745, 999)
 		p.AutomaticSize = Enum.AutomaticSize.X
-		p.LayoutOrder = -i
-		new("UIPadding", { PaddingLeft = UDim.new(0, 15), PaddingRight = UDim.new(0, 15) }, p)
-		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) }, p)
-		box(p, Vector2.new(26, 26), if STATUS_GOOD[s.name] then WHITE else Color3.fromHex("#ff8d8d"), 1, 999)
-		text(p, s.name, 22)
-		if s.sub then
-			text(p, s.sub, 20)
+		new("UIPadding", { PaddingLeft = UDim.new(0, 15), PaddingRight = UDim.new(0, 15), PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 2) }, p)
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, p)
+		local icf = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(40, 40), LayoutOrder = 1 }, p)
+		local sh = new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Position = UDim2.fromOffset(5.66, 5.66), ImageColor3 = INK, ImageTransparency = 0.4 }, icf)
+		Icon.glyph(sh, "st_" .. s.icon)
+		local ic = new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ImageColor3 = if s.bad then Color3.fromHex("#ff8d8d") else WHITE }, icf)
+		Icon.glyph(ic, "st_" .. s.icon)
+		if s.layers and s.layers > 1 then
+			local lay = box(icf, Vector2.new(0, 18), INK, 0.902, 999)
+			lay.AutomaticSize = Enum.AutomaticSize.X
+			lay.AnchorPoint = Vector2.new(1, 1)
+			lay.Position = UDim2.fromScale(1, 1)
+			new("UIPadding", { PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5) }, lay)
+			text(lay, tostring(s.layers), 18, { Size = UDim2.fromOffset(0, 18) })
+		end
+		local nm = text(p, s.name, 22)
+		nm.LayoutOrder = 2
+		if s.secs then
+			local em = text(p, string.format("%ds", math.ceil(s.secs)), 20)
+			em.LayoutOrder = 3
+		end
+		local us = new("UIScale", { Scale = 0.2 }, g)
+		table.insert(statusPops, { s = us, g = g, t = 0 })
+	end
+end
+
+--- cubic-bezier(.2, 1.6, .5, 1) at time fraction x (solved for t by bisection)
+local function stIn(x: number): number
+	local function bz(t: number, a: number, b: number): number
+		local u = 1 - t
+		return 3 * u * u * t * a + 3 * u * t * t * b + t * t * t
+	end
+	local lo, hi = 0, 1
+	for _ = 1, 20 do
+		local mid = (lo + hi) / 2
+		if bz(mid, 0.2, 0.5) < x then
+			lo = mid
+		else
+			hi = mid
+		end
+	end
+	return bz((lo + hi) / 2, 1.6, 1)
+end
+
+local function stepStatusPops(dt: number)
+	for _, sp in statusPops do
+		if sp.t < 0.2 then
+			sp.t = math.min(0.2, sp.t + dt)
+			local k = stIn(sp.t / 0.2)
+			sp.s.Scale = 0.2 + 0.8 * k
+			sp.g.GroupTransparency = 1 - math.clamp(k, 0, 1)
 		end
 	end
 end
 
 -- ------------------------------------------------------------------ frame
+local updateCore: (number) -> ()
+--- #hud.inv-open (duckov.css): weapons, hotbar, ammo, distance marker, stamina ring, statuses, clock, controls hint,
+--- HP, rings and armor hide while the LootView is open; the reticle too (uiOpen)
 function Hud.update(dt: number)
+	updateCore(dt)
+	if PC.invOpen then
+		for _, o in { R.dim, R.clock, R.hint, R.controls, R.statuses, R.marker, R.stam, R.ret } do
+			if o then
+				o.Visible = false
+			end
+		end
+	else
+		-- updateCore sets the alive-dependent groups itself
+		for _, o in { R.clock, R.hint, R.ret } do
+			if o then
+				o.Visible = true
+			end
+		end
+	end
+end
+
+function updateCore(dt: number)
 	if not gui then
 		return
 	end
@@ -722,38 +873,25 @@ function Hud.update(dt: number)
 	local eq = equip()
 	local ad, hd = player:GetAttribute("ArmorDur"), player:GetAttribute("HelmetDur")
 	local hasVest, hasHelm = eq.armor ~= nil and eq.armor ~= "", eq.helmet ~= nil and eq.helmet ~= ""
-	R.armVest.Text = if hasVest then string.format("🦺 %d", if typeof(ad) == "number" then math.floor(ad) else 0) else "🦺"
-	R.armHelmet.Text = if hasHelm then string.format("⛑ %d", if typeof(hd) == "number" then math.floor(hd) else 0) else "⛑"
-	R.armVest.TextColor3 = if hasVest then Color3.fromHex("#e9ecee") else Color3.fromRGB(255, 141, 141)
-	R.armHelmet.TextColor3 = if hasHelm then Color3.fromHex("#e9ecee") else Color3.fromRGB(255, 141, 141)
+	for _, a in { { R.armVest, R.armVestIc, hasVest, ad, eq.armor }, { R.armHelmet, R.armHelmetIc, hasHelm, hd, eq.helmet } } do
+		local lbl, ic, has, dur, id = a[1], a[2], a[3], a[4], a[5]
+		local g = has and Guns.items[id] and Guns.items[id].gear
+		local max = (g and g.dur) or 0
+		local cur = if has then math.ceil(if typeof(dur) == "number" then dur else max) else 0
+		lbl.Text = if has then string.format("%d/%d", cur, max) else ""
+		ic.ImageColor3 = if not has then Color3.fromRGB(255, 141, 141) elseif cur <= 0 then Color3.fromHex("#8c8f92") else Color3.fromHex("#e9ecee")
+		ic.ImageTransparency = if not has then 0.15 else 0
+	end
 
-	-- weapon buttons: the held gun's model in a viewport, selected ring #FFECE1 + punch
-	local assets = ReplicatedStorage:FindFirstChild("CreatorAssets")
+	-- weapon buttons: the weapon's own model (Icon.render), selected ring #FFECE1 + punch
 	for i, key in { "gun", "gun2", "melee" } do
 		local w = R.weapons[i]
 		local id = eq[key] or ""
 		if id ~= w.id then
 			w.id = id
-			for _, c in w.vp:GetChildren() do
-				if not c:IsA("Camera") then
-					c:Destroy()
-				end
-			end
 			local def = Guns.items[id]
 			w.name.Text = if def then def.name else ""
-			if def and def.fire and assets then
-				local len = def.fire.length or 0.5
-				local model = if def.fire.caliber == "SHT" or (def.fire.pellets or 1) > 1 then "GunShotgun" elseif string.sub(id, 1, 2) == "ak" or len >= 0.9 then "GunRifle" elseif len <= 0.55 then "GunPistol" else "GunSmg"
-				local t = assets:FindFirstChild(model)
-				if t then
-					local m = t:Clone()
-					m:PivotTo(CFrame.new())
-					m.Parent = w.vp
-					local cf, size = m:GetBoundingBox()
-					local r = size.Magnitude
-					w.cam.CFrame = CFrame.lookAt(cf.Position + Vector3.new(0, r * 0.15, r * 1.9), cf.Position)
-				end
-			end
+			require(script.Parent.Icon).apply(w.icon, if def then id else nil)
 		end
 		local sel = (i == (PC.slot or 1))
 		if sel and not w.sel.Enabled then
@@ -762,40 +900,82 @@ function Hud.update(dt: number)
 		w.sel.Enabled = sel
 		w.punch.Scale += (1 - w.punch.Scale) * math.min(1, dt * 20)
 	end
-	-- hotbar: the backpack's usable items; the item in use gets the 3 px #FF9E3A ring
+	-- hotbar (Hud.ts): the bound ids (Profile hotbar, set in the LootView); the icon at .35 when none are left, the count
+	-- pill above 1, the selected throwable's 3 px orange ring
 	table.clear(hotbar)
-	local counts = {}
+	local counts: { [string]: number } = {}
 	for _, st in bagStacks() do
-		local def = Guns.items[st.id]
-		if def and (def.use or def.kind == "throwable") then
-			table.insert(hotbar, st.id)
-			counts[#hotbar] = st.n
+		counts[st.id] = (counts[st.id] or 0) + st.n
+	end
+	local rawHot = player:GetAttribute("Hotbar")
+	local k0 = 0
+	if typeof(rawHot) == "string" then
+		for id in string.gmatch(rawHot .. ",", "([^,]*),") do
+			k0 += 1
+			hotbar[k0] = id
 		end
 	end
-	local usingId = player:GetAttribute("UseId")
 	for k = 1, 6 do
 		local hs = R.hot[k]
-		local id = hotbar[k]
+		local id = if hotbar[k] and hotbar[k] ~= "" then hotbar[k] else nil
 		local def = id and Guns.items[id]
-		hs.name.Text = if def then def.name else ""
+		local n = if id then counts[id] or 0 else 0
+		hs.name.Text = ""
 		if (id or "") ~= hs.iconId then
 			hs.iconId = id or ""
 			require(script.Parent.Icon).apply(hs.icon, id)
 		end
+		hs.icon.ImageTransparency = if n > 0 then 0 else 0.65
+		local render = hs.icon:FindFirstChild("Render") :: ViewportFrame?
+		if render then
+			render.ImageTransparency = if n > 0 then 0 else 0.65
+		end
 		hs.ringIn.Enabled = def ~= nil
 		hs.frame.BackgroundTransparency = if def then 0.8 else 0.251
-		hs.ct.Visible = def ~= nil
-		hs.cts.Text = if def then tostring(counts[k]) else ""
+		hs.ct.Visible = def ~= nil and n > 1
+		hs.cts.Text = if def then tostring(n) else ""
 		local throwSel = def ~= nil and PC.held == "throw" and require(script.Parent.Throw).id == id
-		if def and (usingId == id or throwSel) then
-			-- the item in use, or the selected throwable (.sel)
-			hs.ringIn.Color = if throwSel then WHITE else Color3.fromHex("#ff9e3a")
+		if throwSel then
+			hs.ringIn.Color = Color3.fromHex("#ff9e3a")
 			hs.ringIn.Thickness = 3
 			hs.ringIn.Transparency = 0
 		else
 			hs.ringIn.Color = WHITE
 			hs.ringIn.Thickness = 2
 			hs.ringIn.Transparency = 0.702
+		end
+	end
+
+	-- the open ammo type list
+	local BL = require(script.Parent.BulletList)
+	BL.tick()
+	local bkey = if BL.open then tostring(BL.index) .. "|" .. #BL.entries else ""
+	for _, e in BL.entries do
+		bkey ..= (e.id or "-") .. e.count
+	end
+	if bkey ~= R.blistKey then
+		R.blistKey = bkey
+		for _, c in R.blist:GetChildren() do
+			if c:IsA("GuiObject") then
+				c:Destroy()
+			end
+		end
+		R.blist.Visible = BL.open
+		if BL.open then
+			for i, e in BL.entries do
+				local selE = i == BL.index
+				local p = box(R.blist, Vector2.new(0, 30.6), if selE then WHITE else Color3.fromHex("#a4a4a4"), if selE then 1 else 0.85, 999)
+				p.AutomaticSize = Enum.AutomaticSize.X
+				p.LayoutOrder = -i
+				new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, p)
+				local d = e.id and Guns.items[e.id]
+				local t = text(p, (if d then d.name else "Not Assigned") .. (if e.id then "  " .. e.count else ""), 18,
+					{ Size = UDim2.fromOffset(0, 30.6), TextColor3 = if selE then INK else WHITE })
+				local st = t:FindFirstChildOfClass("UIStroke")
+				if st and selE then
+					st.Enabled = false
+				end
+			end
 		end
 	end
 
@@ -806,7 +986,9 @@ function Hud.update(dt: number)
 	R.ammo.Visible = isGun
 	R.read.Visible = isGun
 	if isGun then
-		local ammoId = Guns.ammoOf(gid :: string)
+		-- the loaded type's name (Player.loadedType)
+		local at = player:GetAttribute("AmmoType")
+		local ammoId = if typeof(at) == "string" then at else Guns.ammoOf(gid :: string)
 		local adef = ammoId and Guns.items[ammoId]
 		local reserve = player:GetAttribute("Reserve")
 		local res = if typeof(reserve) == "number" then reserve else 0
@@ -821,7 +1003,7 @@ function Hud.update(dt: number)
 	-- distance pill colours vs the weapon range
 	local d = (PC.aim - PC.pos).Magnitude
 	R.markerT.Text = string.format("%.1fm", d)
-	local g = if isGun then Guns.row(gid :: string) else nil
+	local g = if isGun then Guns.rowWith(gid :: string, player:GetAttribute("GunAtt")) else nil
 	R.markerT.TextColor3 = if g and d > Guns.range(g) then Color3.fromHex("#ff7c7c") elseif g and d > Guns.range(g) * 0.5 then Color3.fromHex("#ff9d4e") else Color3.fromHex("#d0ff99")
 
 	-- reticle: diamonds pushed out by the spread, breathing 45 -> 50 -> 45 over 0.333 s, kick +-10 deg over 0.1 s per shot
@@ -914,6 +1096,7 @@ function Hud.update(dt: number)
 
 	-- item use progress (holds are set by Interact)
 	local useUntil, useStart = player:GetAttribute("UseUntil"), player:GetAttribute("UseStart")
+	local usingId = player:GetAttribute("UseId")
 	if usingId and typeof(useUntil) == "number" and typeof(useStart) == "number" then
 		Hud.setProgress((Workspace:GetServerTimeNow() - useStart) / math.max(0.01, useUntil - useStart))
 		wake = 0
@@ -989,45 +1172,46 @@ function Hud.update(dt: number)
 		R.banT:FindFirstChildOfClass("UIStroke").Transparency = 1 - 0.65 * a
 	end
 
-	-- statuses
-	local list = {}
+	-- statuses (Hud.updateStatuses order): bleeding, pain, weight, thirst, hunger, distortion
+	local list: { Status } = {}
 	local bleed = player:GetAttribute("Bleed")
 	if typeof(bleed) == "number" and bleed > 0 then
-		table.insert(list, { name = "Bleeding", sub = "x" .. bleed })
+		table.insert(list, { icon = "bleed", name = "Bleeding", bad = true, layers = bleed })
 	end
 	if os.clock() < painUntil then
-		table.insert(list, { name = "Pain", sub = string.format("%ds", math.ceil(painUntil - os.clock())) })
+		table.insert(list, { icon = "pain", name = "Pain", bad = true, secs = painUntil - os.clock() })
 	end
 	local load = player:GetAttribute("Load")
 	if typeof(load) == "number" then
 		if load > 1 then
-			table.insert(list, { name = "Overloaded" })
+			table.insert(list, { icon = "weight", name = "Overloaded", bad = true })
 		elseif load > 0.75 then
-			table.insert(list, { name = "Overweight" })
+			table.insert(list, { icon = "weight", name = "Overweight", bad = true })
 		elseif load <= 0.25 then
-			table.insert(list, { name = "Agile" })
+			table.insert(list, { icon = "agile", name = "Agile", bad = false })
 		end
-	end
-	if player:GetAttribute("Distortion") then
-		local layers = player:GetAttribute("StormLayers")
-		table.insert(list, { name = "Distortion", sub = if typeof(layers) == "number" then "x" .. layers else nil })
 	end
 	local water, energy = player:GetAttribute("Water"), player:GetAttribute("Energy")
 	if typeof(water) == "number" then
 		if water <= 0 then
-			table.insert(list, { name = "Dehydrated" })
+			table.insert(list, { icon = "thirst", name = "Dehydrated", bad = true })
 		elseif water < 25 then
-			table.insert(list, { name = "Thirsty" })
+			table.insert(list, { icon = "thirst", name = "Thirsty", bad = true })
 		end
 	end
 	if typeof(energy) == "number" then
 		if energy <= 0 then
-			table.insert(list, { name = "Starving" })
+			table.insert(list, { icon = "hunger", name = "Starving", bad = true })
 		elseif energy < 25 then
-			table.insert(list, { name = "Hungry" })
+			table.insert(list, { icon = "hunger", name = "Hungry", bad = true })
 		end
 	end
+	if player:GetAttribute("Distortion") then
+		local layers = player:GetAttribute("StormLayers")
+		table.insert(list, { icon = "storm", name = "Distortion", bad = true, layers = if typeof(layers) == "number" then layers else nil })
+	end
 	setStatuses(list)
+	stepStatusPops(dt)
 
 	-- calm-HUD dim after 4 s without a change (.42 over 0.6 s)
 	local sig = string.format("%s|%s|%s|%s|%d|%d", tostring(gid), tostring(PC.held), tostring(PC.slot), tostring(player:GetAttribute("Bag")), math.floor((tonumber(water) or 0) / 5), math.floor((tonumber(energy) or 0) / 5))
@@ -1048,12 +1232,12 @@ function Hud.update(dt: number)
 			table.remove(nums, i)
 		else
 			n.v -= Vector3.new(0, 10 * dt, 0)
-			n.pos += Vector3.new(n.v.X * dt * 0.3, n.v.Y * dt, 0)
+			n.pos += n.v * dt
 			local p, on = toScreen(n.pos)
 			n.lbl.Visible = on
 			n.lbl.Position = UDim2.fromOffset(p.X, p.Y)
 			local life = n.t / 0.9
-			n.lbl:FindFirstChildOfClass("UIScale").Scale = (if life < 0.16 then 1.869 - 0.869 * (life / 0.16) else 1) * (if n.crit then 1.2 else 1)
+			n.lbl:FindFirstChildOfClass("UIScale").Scale = (if life < 0.1616 then 1.869 - 0.869 * (life / 0.1616) else 1) * (if n.crit then 1.2 else 1)
 			local a = if life < 0.5 then 1 else 1 - (life - 0.5) / 0.5
 			n.lbl.TextTransparency = 1 - a
 			n.lbl:FindFirstChildOfClass("UIStroke").Transparency = 1 - a
@@ -1066,7 +1250,12 @@ function Hud.update(dt: number)
 			sm.f:Destroy()
 			table.remove(snds, i)
 		else
-			sm.f.BackgroundTransparency = if sm.t < 0.1 then 1 - sm.t / 0.1 else (sm.t - 0.1) / 1.4
+			local tr = if sm.t < 0.1 then 1 - sm.t / 0.1 else (sm.t - 0.1) / 1.4
+			if sm.f:IsA("ImageLabel") then
+				(sm.f :: ImageLabel).ImageTransparency = tr
+			else
+				sm.f.BackgroundTransparency = tr
+			end
 		end
 	end
 end
@@ -1074,7 +1263,12 @@ end
 function Hud.start()
 	build()
 	Fx.onHitMarker = hitMarker
-	Combat.onSound = Hud.soundMarker
+	Combat.onSound = function(at: Vector3)
+		Hud.soundMarker(at, "shot")
+	end
+	require(script.Parent.Vision).onStep = function(at: Vector3)
+		Hud.soundMarker(at, "step")
+	end
 	Fx.onDamage = function(at: Vector3, dmg: number, crit: boolean)
 		Hud.damageNumber(at, dmg, crit)
 	end
@@ -1082,7 +1276,7 @@ function Hud.start()
 		Hud.toast(t, kind)
 	end)
 	UserInputService.InputBegan:Connect(function(input, processed)
-		if not processed and input.KeyCode == Enum.KeyCode.O then
+		if not processed and input.KeyCode == Enum.KeyCode.O and not PC.photoOpen then
 			R.controls.Visible = not R.controls.Visible
 		end
 	end)

@@ -236,3 +236,13 @@ Key files, all under `/Users/joel/Desktop/Vibecoding/Games/EscapeFromBlockov/`:
 - `src/ui/duckov.css`
 - `src/game/gz/gz_charclips.json`
 - `src/game/gz/gz_holdpose.json`
+## 4. ROBLOX IMPLEMENTATION NOTES (2026-10-18)
+
+- Roll: `tools/gen_roll.py` runs forward kinematics on `gz_charclips.json` and writes each R15 joint's parent-relative
+  rotation against the clip's first sample (the standing pose). Web model space goes to avatar root space by the mirror
+  z → −z. The pelvis offset is in metres (the beaver skeleton root has scale 1). `CharAnim` slerps the 24 samples
+  (u = phase × 23) on Motor6D or AnimationConstraint `Transform`, with the Animator parked.
+- Gun during the roll: forward kinematics over the same transforms gives the RightGripAttachment in HRP space. The
+  GunWeld is pinned to the HRP there with the rest-pose rotation, matching the web holder's position-only follow.
+- Blood/fx: `Fx.luau`. Each particle colour is a Model with one Highlight (flat, unlit, occluded). Decals are 64 px
+  octagon EditableImages on LightInfluence-0 SurfaceGuis, at heights 0.6 mm apart so overlaps blend.

@@ -49,6 +49,7 @@ Combat.start()
 Interact.start()
 Results.start()
 Inventory.start()
+require(script.Parent.PhotoMode).start()
 require(script.Parent.MapUI).start()
 require(script.Parent.NoteUI).start()
 
@@ -60,29 +61,107 @@ ContextActionService:BindActionAtPriority("BlockovDodge", function(_, state)
 end, false, 3000, Enum.KeyCode.Space)
 
 local Net = require(Shared.Net)
+local BulletList = require(script.Parent.BulletList)
 local SLOT_KEYS = { [Enum.KeyCode.Three] = 1, [Enum.KeyCode.Four] = 2, [Enum.KeyCode.Five] = 3, [Enum.KeyCode.Six] = 4, [Enum.KeyCode.Seven] = 5, [Enum.KeyCode.Eight] = 6 }
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed or PC.blocked then
 		return
 	end
-	if input.KeyCode == Enum.KeyCode.One then
+	-- World.handleSlots: 1 / 2 / V switch, "Empty slot" / "No melee weapon" when there is nothing there; V on the melee
+	-- goes back to the gun
+	local eq: { [string]: string } = {}
+	local rawEq = player:GetAttribute("Equip")
+	if typeof(rawEq) == "string" then
+		for k, v in string.gmatch(rawEq, "(%w+)=([^,]*)") do
+			eq[k] = v
+		end
+	end
+	local function has(k: string): boolean
+		return eq[k] ~= nil and eq[k] ~= ""
+	end
+	if input.KeyCode == Enum.KeyCode.One or input.KeyCode == Enum.KeyCode.Two then
+		local key = if input.KeyCode == Enum.KeyCode.One then "gun" else "gun2"
+		if not has(key) then
+			Hud.toast("Empty slot", "info")
+			return
+		end
 		PC.held = "gun"
-		PC.slot = 1
-		Net.event("SelectSlot"):FireServer("gun")
-	elseif input.KeyCode == Enum.KeyCode.Two then
-		PC.held = "gun"
-		PC.slot = 2
-		Net.event("SelectSlot"):FireServer("gun2")
+		PC.slot = if key == "gun" then 1 else 2
+		Net.event("SelectSlot"):FireServer(key)
+	elseif input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.Right then
+		-- World.switchWeapon: the equipped firearm1 / firearm2 / melee in order, Left = previous, wrapping
+		local list = {}
+		for _, k in { "gun", "gun2", "melee" } do
+			if has(k) then
+				table.insert(list, k)
+			end
+		end
+		if #list > 0 then
+			local cur = if PC.held == "melee" then "melee" elseif PC.slot == 2 then "gun2" else "gun"
+			local i = (table.find(list, cur) or 1) - (if input.KeyCode == Enum.KeyCode.Left then 1 else -1)
+			if i < 1 then
+				i = #list
+			elseif i > #list then
+				i = 1
+			end
+			local key = list[i]
+			PC.held = if key == "melee" then "melee" else "gun"
+			PC.slot = if key == "gun" then 1 elseif key == "gun2" then 2 else 3
+			Net.event("SelectSlot"):FireServer(key)
+		end
+	elseif input.KeyCode == Enum.KeyCode.C then
+		-- World: C puts the weapon away / takes it back out
+		if PC.held == "none" then
+			local key = if has("gun") then "gun" elseif has("gun2") then "gun2" else "melee"
+			PC.held = if key == "melee" then "melee" else "gun"
+			PC.slot = if key == "gun" then 1 elseif key == "gun2" then 2 else 3
+			Net.event("SelectSlot"):FireServer(key)
+		else
+			PC.held = "none"
+			Net.event("SelectSlot"):FireServer("none")
+		end
+	elseif input.KeyCode == Enum.KeyCode.T then
+		-- SwitchBulletType: open the type list / apply its selection (audio 'reload' when a new type is applied)
+		if BulletList.press() then
+			require(script.Parent.Sfx).play("reload")
+		end
+	elseif input.KeyCode == Enum.KeyCode.Up or input.KeyCode == Enum.KeyCode.Down then
+		BulletList.switchInput(if input.KeyCode == Enum.KeyCode.Up then 1 else -1)
+	elseif input.KeyCode == Enum.KeyCode.P then
+		-- UI_ToggleCameraMode: Photo Mode, only while no view is open (PC.blocked)
+		require(script.Parent.PhotoMode).activate(input)
+	elseif input.KeyCode == Enum.KeyCode.N then
+		-- World.toggleNightVision (the server answers with the toast)
+		Net.event("NightVision"):FireServer()
+	elseif input.KeyCode == Enum.KeyCode.F1 then
+		-- CharacterMainControl.Quack (our Whistle): the voice and an AI noise of radius 15 at the character
+		require(script.Parent.Sfx).play("whistle")
+		Net.event("Whistle"):FireServer()
 	elseif input.KeyCode == Enum.KeyCode.Y then
 		-- World.ts: Y toggles the top-down view
 		CameraRig.topDown = not CameraRig.topDown
 	elseif input.KeyCode == Enum.KeyCode.V then
-		PC.held = "melee"
-		PC.slot = 3
-		Net.event("SelectSlot"):FireServer("melee")
+		if PC.held == "melee" then
+			local key = if has("gun") then "gun" elseif has("gun2") then "gun2" else nil
+			if key then
+				PC.held = "gun"
+				PC.slot = if key == "gun" then 1 else 2
+				Net.event("SelectSlot"):FireServer(key)
+			end
+		elseif not has("melee") then
+			Hud.toast("No melee weapon", "info")
+		else
+			PC.held = "melee"
+			PC.slot = 3
+			Net.event("SelectSlot"):FireServer("melee")
+		end
 	elseif SLOT_KEYS[input.KeyCode] then
-		local id = Hud.hotbarItem(SLOT_KEYS[input.KeyCode])
-		if id then
+		local id, count = Hud.hotbarItem(SLOT_KEYS[input.KeyCode])
+		if id and count <= 0 then
+			-- World: "No <item> left"
+			local it = require(Shared.gen.Items).items[id]
+			Hud.toast("No " .. (if it then it.name else id) .. " left", "bad")
+		elseif id then
 			-- a throwable becomes the held item (World: switchTo('throw', id)); "No X left" when the stack is gone
 			local it = require(Shared.gen.Items).items[id]
 			if it and it.kind == "throwable" then
@@ -118,7 +197,11 @@ RunService:BindToRenderStep("Blockov3C", Enum.RenderPriority.Camera.Value + 1, f
 	PC.update(dt, cursor)
 	Combat.update(dt)
 	local gun = if PC.held == "gun" then PC.gun else nil
-	CameraRig.update(dt, PC.pos.X, PC.pos.Y, {
+	local Photo = require(script.Parent.PhotoMode)
+	if Photo.active then
+		Photo.update(dt)
+	else
+		CameraRig.update(dt, PC.pos.X, PC.pos.Y, {
 		cursor = cursor,
 		triggerHeld = Combat.triggerHeld(),
 		ads = PC.ads,
@@ -126,6 +209,7 @@ RunService:BindToRenderStep("Blockov3C", Enum.RenderPriority.Camera.Value + 1, f
 		adsFactor = if gun then gun.ADSAimDistanceFactor else nil,
 		inputBlocked = PC.blocked,
 	})
+	end
 	Interact.update(dt)
 	Vision.update()
 	Vision.fan(true)
