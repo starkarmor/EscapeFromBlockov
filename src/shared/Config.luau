@@ -44,6 +44,11 @@ Config.Shake = {
 
 -- CameraVolumes (gz_volumes.json level14, our frame x = wx - 329, z = -(wz - 241)); hide = off in Motion Sickness mode.
 -- Blend: t = 1 - (d / blend)^2 outside the sphere, pitch eases 5/s, yaw and distance 2/s.
+-- the cave sub-scene (level15): a global volume (15, -8, 20) and the close-up sphere at its mouth (priority 11)
+Config.CaveVolumes = {
+	global = { pitch = 15, yaw = -8, distance = 20 },
+	{ x = 582.733 - 329, z = -(552.069 - 241), sphere = 9, blend = 17.23, pitch = 35, yaw = -15, distance = 50 },
+}
 Config.CameraVolumes = {
 	{ x = 221.193 - 329, z = -(304.179 - 241), sphere = 10, blend = 10, pitch = 19.58, yaw = -7.8, distance = 35 },
 	{ x = 453.363 - 329, z = -(103.589 - 241), sphere = 6, blend = 8, pitch = 25, yaw = -45, distance = 35 },

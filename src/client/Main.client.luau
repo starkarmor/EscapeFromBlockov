@@ -73,6 +73,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		PC.held = "gun"
 		PC.slot = 2
 		Net.event("SelectSlot"):FireServer("gun2")
+	elseif input.KeyCode == Enum.KeyCode.Y then
+		-- World.ts: Y toggles the top-down view
+		CameraRig.topDown = not CameraRig.topDown
 	elseif input.KeyCode == Enum.KeyCode.V then
 		PC.held = "melee"
 		PC.slot = 3
@@ -96,7 +99,7 @@ end)
 
 local snapped = false
 RunService:BindToRenderStep("Blockov3C", Enum.RenderPriority.Camera.Value + 1, function(dt)
-	dt = math.min(dt, 0.1)
+	dt = math.min(dt, 0.05) -- core/Loop.ts clamps the frame dt to 0.05 s
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then

@@ -28,9 +28,18 @@ local function applyYaw()
 end
 
 --- CameraVolumes.blendVolumes for the character's point
+local CaveB = require(Shared.CaveData).bounds
+CameraRig.topDown = false -- Y: Switch View (TopDownVolume: pitch 80, distance 53; yaw from the volumes)
 local function armGoal(px: number, pz: number): (number, number, number)
 	local gp, gy, gd = C.pitch, C.yaw, C.distance
-	for _, v in Config.CameraVolumes do
+	local list = Config.CameraVolumes
+	if px >= CaveB.minX and px <= CaveB.maxX and pz >= CaveB.minZ and pz <= CaveB.maxZ then
+		-- the cave scene's own stack: its global volume, then its local sphere
+		local g = Config.CaveVolumes.global
+		gp, gy, gd = g.pitch, g.yaw, g.distance
+		list = Config.CaveVolumes
+	end
+	for _, v in ipairs(list) do
 		local d = math.max(0, math.sqrt((px - v.x) ^ 2 + (pz - v.z) ^ 2) - v.sphere)
 		if d * d <= v.blend * v.blend then
 			local t = if v.blend > 0 then 1 - (d * d) / (v.blend * v.blend) else 1
@@ -127,6 +136,9 @@ function CameraRig.update(dt: number, tx: number, tz: number, a: AimInput)
 	cam.CameraType = Enum.CameraType.Scriptable
 	-- CameraArm.Update: ease to the blended volumes (pitch 5/s, yaw and distance 2/s)
 	local tp, ty, td = armGoal(tx, tz)
+	if CameraRig.topDown then
+		tp, td = 80, 53
+	end
 	-- Studio-only inspection fixture: the "DevZoom" attribute (metres) pulls the arm in for close captures
 	local devZoom = game:GetService("Players").LocalPlayer:GetAttribute("DevZoom")
 	if typeof(devZoom) == "number" and game:GetService("RunService"):IsStudio() then

@@ -223,5 +223,13 @@
    "kind": "static",
    "note": "1 script stripped"
   }
- }
+ },
+ "gunpack": {
+  "id": "127406876486021",
+  "title": "Low Poly Gun Pack Assault Rifle Pistol Mesh",
+  "creator": "BlazeEagleNinja9014",
+  "role": "held gun models per weapon (tools/import_gunpack.py)",
+  "note": "2 scripts (Material / PoseTexture pattern) stripped before use"
+ },
+ "gunFlip": {}
 }

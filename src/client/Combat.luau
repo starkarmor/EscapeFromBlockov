@@ -236,7 +236,10 @@ function Combat.update(dt: number)
 			PC.meleeAnim = 1
 			Net.event("Melee"):FireServer()
 			Sfx.play("swoosh")
-			CameraRig.shake(0.05, "melee", Vector2.new(math.sin(PC.facing), math.cos(PC.facing)))
+			-- World.ts melee shake: dir (cos f + 0.3 ux, -sin f + 0.3 uz), (ux, uz) from a random unit sphere point
+			local u = Vector3.new(math.random() * 2 - 1, math.random() * 2 - 1, math.random() * 2 - 1)
+			u = if u.Magnitude > 1e-3 then u.Unit else Vector3.xAxis
+			CameraRig.shake(0.05, "melee", Vector2.new(math.cos(PC.facing) + 0.3 * u.X, -math.sin(PC.facing) + 0.3 * u.Z))
 		end
 		pressed = false
 		return
