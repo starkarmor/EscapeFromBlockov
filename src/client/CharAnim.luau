@@ -1,63 +1,54 @@
 --!strict
--- Plays the source clips on every character rig near the camera (each client animates every rig locally; nothing here
--- replicates). State comes from the root's velocity and facing plus replicated attributes:
---   Held = "gun" | "melee" | "none", DodgeAt / MeleeAt = workspace:GetServerTimeNow() at the action start.
--- The local player's own state overrides through CharAnim.localState.
+-- Client-side body layers on every character near the camera (each client applies them locally; nothing replicates):
+--   humanoids (the players' avatars, the store enemies): Roblox's Animate / the server's tracks play the clips; this adds
+--   the web's dodge roll and death fall on the LowerTorso Root motor (C0 is local to each client);
+--   creatures (the store wolf mesh on a ball root): a procedural trot bob and the fall on its Body motor.
+-- State comes from replicated attributes: DodgeAt / DeadAt = workspace:GetServerTimeNow() at the event; the local
+-- player's own dodge comes from PlayerControl through CharAnim.localState.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Skel = require(Shared.Skel)
-local RigBuilder = require(Shared.RigBuilder)
 local Units = require(Shared.Units)
 local Config = require(Shared.Config)
 
 local CharAnim = {}
 local S = Units.S
-local HAND = Skel.index["Hand.Soket.R"]
 local CULL = 70 * S
 
-type Joint = { j: Motor6D, c0inv: CFrame, bone: number, rel: CFrame, weapon: boolean, len: number }
-type Entry = { model: Model, root: BasePart, anim: Skel.Anim, joints: { Joint }, k: number, world: { CFrame }, skeletal: boolean, phase: number }
-local entries: { [Model]: Entry } = {}
+-- the local player's state this frame (PlayerControl.animState)
+CharAnim.localState = nil :: { dodge: number }?
 
--- the local player's state this frame (PlayerControl writes it)
-CharAnim.localState = nil :: Skel.AnimState?
+type Hum = { model: Model, root: BasePart, motor: Motor6D, c0: CFrame, hum: Humanoid, stopped: boolean }
+local hums: { [Model]: Hum } = {}
+type Creature = { model: Model, root: BasePart, motor: Motor6D, phase: number }
+local creatures: { [Model]: Creature } = {}
 
 local function track(model: Model)
-	if entries[model] then
-		return
-	end
 	local root = model:WaitForChild("HumanoidRootPart", 5) :: BasePart?
-	local key = model:GetAttribute("Rig")
-	if not root or typeof(key) ~= "string" then
+	if not root then
 		return
 	end
-	local spec = RigBuilder.spec(key)
-	if not spec then
-		return
-	end
-	local joints: { Joint } = {}
-	for i, p in spec.parts do
-		local j = root:FindFirstChild("J" .. i) :: Motor6D?
-		if j then
-			table.insert(joints, {
-				j = j,
-				c0inv = j.C0:Inverse(),
-				bone = p.bone,
-				rel = CFrame.new(p.p[1], p.p[2], p.p[3], p.q[1], p.q[2], p.q[3], p.q[4]),
-				weapon = p.weapon == true,
-				len = p.size[3],
-			})
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	if hum then
+		local lower = model:WaitForChild("LowerTorso", 5)
+		local motor = lower and lower:FindFirstChild("Root") :: Motor6D?
+		if motor then
+			hums[model] = { model = model, root = root, motor = motor, c0 = motor.C0, hum = hum, stopped = false }
+		end
+	elseif model:GetAttribute("Creature") then
+		local motor = root:WaitForChild("Body", 5) :: Motor6D?
+		if motor then
+			creatures[model] = { model = model, root = root, motor = motor, phase = 0 }
 		end
 	end
-	entries[model] = { model = model, root = root, anim = Skel.newAnim(), joints = joints, k = spec.rootScale, world = {}, skeletal = spec.skeletal, phase = 0 }
 end
 
 local function untrack(model: Model)
-	entries[model] = nil
+	hums[model] = nil
+	creatures[model] = nil
 end
 
 local function phaseOf(model: Model, attr: string, dur: number, now: number): number
@@ -69,88 +60,83 @@ local function phaseOf(model: Model, attr: string, dur: number, now: number): nu
 	return if t >= 0 and t < 1 then math.max(t, 1e-3) else 0
 end
 
+local function stepHum(h: Hum, now: number, me: Model?)
+	local model = h.model
+	local deadAt = model:GetAttribute("DeadAt")
+	if typeof(deadAt) == "number" then
+		-- World.update: fall on the back about the feet over 0.333 s and hold
+		if not h.stopped then
+			h.stopped = true
+			local animator = h.hum:FindFirstChildOfClass("Animator")
+			if animator then
+				for _, t in animator:GetPlayingAnimationTracks() do
+					t:Stop(0.1)
+				end
+			end
+			if model == me then
+				local animate = model:FindFirstChild("Animate") :: LocalScript?
+				if animate then
+					animate.Enabled = false
+				end
+			end
+		end
+		local t = math.clamp((now - deadAt) * 3, 0, 1)
+		local hgt = h.hum.HipHeight + h.root.Size.Y / 2
+		local lift = h.root.Size.Z * 0.5 * t
+		h.motor.C0 = CFrame.new(0, -hgt + lift, 0) * CFrame.Angles(math.rad(90) * t, 0, 0) * CFrame.new(0, hgt, 0) * h.c0
+		return
+	end
+	-- the dodge (Config.Dash.time): a forward roll about the hips with a tuck
+	local dodge = if model == me and CharAnim.localState then CharAnim.localState.dodge else phaseOf(model, "DodgeAt", Config.Dash.time, now)
+	if dodge > 0 then
+		local e = dodge * dodge * (3 - 2 * dodge)
+		local tuck = math.sin(dodge * math.pi) * h.root.Size.Y * 0.45
+		h.motor.C0 = CFrame.new(0, -tuck, 0) * CFrame.Angles(-2 * math.pi * e, 0, 0) * h.c0
+	elseif h.motor.C0 ~= h.c0 then
+		h.motor.C0 = h.c0
+	end
+end
+
+local function stepCreature(c: Creature, dt: number, now: number)
+	local deadAt = c.model:GetAttribute("DeadAt")
+	if typeof(deadAt) == "number" then
+		-- falls on its side
+		local t = math.clamp((now - deadAt) * 3, 0, 1)
+		c.motor.Transform = CFrame.Angles(0, 0, math.rad(90) * t)
+		return
+	end
+	local v = c.root.AssemblyLinearVelocity
+	local sp = Vector2.new(v.X, v.Z).Magnitude / S
+	c.phase += dt * math.max(0.6, sp / 1.2) * 2 * math.pi
+	local k = math.min(1, sp)
+	local dodge = phaseOf(c.model, "DodgeAt", Config.Dash.time, now)
+	local hop = if dodge > 0 then math.sin(dodge * math.pi) * 0.25 * S else 0
+	c.motor.Transform = CFrame.new(0, math.abs(math.sin(c.phase)) * 0.05 * S * k + hop, 0) * CFrame.Angles(math.sin(c.phase * 2) * 0.06 * k, 0, 0)
+end
+
 function CharAnim.step(dt: number)
 	local cam = Workspace.CurrentCamera
 	local focus = cam and cam.Focus.Position or Vector3.zero
 	local now = Workspace:GetServerTimeNow()
 	local me = Players.LocalPlayer.Character
-	for model, e in entries do
+	for model, h in hums do
 		if not model.Parent then
-			entries[model] = nil
-			continue
+			hums[model] = nil
+		elseif (h.root.Position - focus).Magnitude <= CULL then
+			stepHum(h, now, me)
 		end
-		local rp = e.root.Position
-		if (rp - focus).Magnitude > CULL then
-			continue
-		end
-		-- death (Enemy.update / World.update): fall on the back about the feet over 0.333 s (rotation 90 deg, rise 0.3 m), then
-		-- hold; the root is anchored by the server, the bones keep their last pose
-		local deadAt = model:GetAttribute("DeadAt")
-		local fall = CFrame.identity
-		local frozen = false
-		if typeof(deadAt) == "number" then
-			local t = math.clamp((now - deadAt) * 3, 0, 1)
-			local R = RigBuilder.ROOT_R
-			fall = CFrame.new(0, -R + 0.3 * S * t, 0) * CFrame.Angles(math.rad(90) * t, 0, 0) * CFrame.new(0, R, 0)
-			frozen = true
-		end
-		local st: Skel.AnimState
-		if frozen then
-			st = { dt = 0, speed = 0, dirX = 0, dirZ = 1, aiming = false, melee = 0, dodge = 0 }
-		elseif model == me and CharAnim.localState then
-			st = CharAnim.localState
-			st.dt = dt
-		else
-			local v = e.root.AssemblyLinearVelocity
-			local look = e.root.CFrame.LookVector
-			local right = e.root.CFrame.RightVector
-			local sp = Vector2.new(v.X, v.Z).Magnitude / S
-			local dx, dz = 0, 1
-			if sp > 0.02 then
-				local h = Vector3.new(v.X, 0, v.Z).Unit
-				-- web localDir: x along the model's +x (the root's -RightVector, RigBuilder.FLIP), z along the facing
-				dx, dz = -h:Dot(right), h:Dot(look)
-			end
-			st = {
-				dt = dt,
-				speed = sp,
-				dirX = dx,
-				dirZ = dz,
-				aiming = model:GetAttribute("Held") == "gun",
-				melee = phaseOf(model, "MeleeAt", 1 / 5, now),
-				dodge = phaseOf(model, "DodgeAt", Config.Dash.time, now),
-			}
-		end
-		if not e.skeletal then
-			-- quadruped (wolverine): its own skeleton is not ported; a procedural trot bob on the bind pose
-			e.phase += dt * math.max(0.6, st.speed / 1.2) * 2 * math.pi
-			local bob = fall * CFrame.new(0, math.abs(math.sin(e.phase)) * 0.05 * S * math.min(1, st.speed), 0)
-			for _, jt in e.joints do
-				jt.j.Transform = jt.c0inv * bob * RigBuilder.partCFrame(e.world, 0, jt.rel, e.k)
-			end
-			continue
-		end
-		if not frozen or not e.anim.pose then
-			Skel.update(e.anim, st)
-		end
-		local world = Skel.fk(e.anim.pose, e.world)
-		local hand = world[HAND]
-		for _, jt in e.joints do
-			local cf: CFrame
-			if jt.weapon then
-				-- the gun at the hand socket, pointing along the facing (BoneAnim: holder at the socket + len / 2 forward)
-				local hp = hand.Position
-				local m = CFrame.new(hp.X, hp.Y, hp.Z + jt.len / 2)
-				cf = RigBuilder.partCFrame({ m }, 1, CFrame.identity, e.k)
-			else
-				cf = RigBuilder.partCFrame(world, jt.bone, jt.rel, e.k)
-			end
-			jt.j.Transform = jt.c0inv * fall * cf
+	end
+	for model, c in creatures do
+		if not model.Parent then
+			creatures[model] = nil
+		elseif (c.root.Position - focus).Magnitude <= CULL then
+			stepCreature(c, dt, now)
 		end
 	end
 end
 
 function CharAnim.start()
+	game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
 	local folder = Workspace:WaitForChild("Characters")
 	for _, m in folder:GetChildren() do
 		if m:IsA("Model") then

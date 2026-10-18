@@ -106,7 +106,7 @@ function Breakables.start()
 			ref = barrel,
 		}
 	end
-	print(string.format("[Canuckov] %d explosive barrels", n))
+	print(string.format("[Blockov] %d explosive barrels", n))
 end
 
 return Breakables

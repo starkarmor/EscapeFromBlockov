@@ -25,7 +25,7 @@ local TIPS = {
 	"A hit hurts: it drains stamina and slows you for a moment. Painkillers cancel that.",
 	"With a gun in hand, press T to change ammo type.",
 	"In the backpack, drag attachments onto your weapon to fit them quickly. Check that they are compatible.",
-	"When a brute goose flashes red, roll out of the way.",
+	"When a Brute flashes red, roll out of the way.",
 	"You move slower while a weapon is in your hands.",
 	"The storm is deadly. Sit it out in the bunker and sleep through the day.",
 }
@@ -93,21 +93,14 @@ local function curtain(kind: string, onDone: () -> ())
 	bg.Parent = r
 	local head = label(bg, if kind == "dead" then "You went down" else "Extracted", 150, Color3.new(1, 1, 1), { Position = UDim2.fromOffset(220, 300), FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Heavy) })
 	label(bg, if kind == "dead" then "The bunker will patch you up" else "Back to the bunker", 48, Color3.new(1, 1, 1), { Position = UDim2.fromOffset(226, 300 + 190), TextTransparency = 0.1 })
-	-- the voxel figure bob (1.1 s alternate): a blocky beaver silhouette
-	local fig = Instance.new("Frame")
+	-- the figure bob (1.1 s alternate): the player's own avatar (full-body thumbnail)
+	local fig = Instance.new("ImageLabel")
 	fig.AnchorPoint = Vector2.new(0.5, 1)
 	fig.Position = UDim2.new(0.72, 0, 0.62, 0)
-	fig.Size = UDim2.fromOffset(220, 260)
-	fig.BackgroundColor3 = Color3.fromHex("#a56a32")
-	fig.BorderSizePixel = 0
+	fig.Size = UDim2.fromOffset(300, 300)
+	fig.BackgroundTransparency = 1
+	fig.Image = string.format("rbxthumb://type=Avatar&id=%d&w=420&h=420", math.max(1, Players.LocalPlayer.UserId))
 	fig.Parent = bg
-	local belly = Instance.new("Frame")
-	belly.AnchorPoint = Vector2.new(0.5, 1)
-	belly.Position = UDim2.new(0.5, 0, 1, -20)
-	belly.Size = UDim2.fromOffset(120, 140)
-	belly.BackgroundColor3 = Color3.fromHex("#e8c898")
-	belly.BorderSizePixel = 0
-	belly.Parent = fig
 	TweenService:Create(fig, TweenInfo.new(1.1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Position = UDim2.new(0.72, 0, 0.6, 0) }):Play()
 	-- tips pill: black .682 r60, 800 wide, text 20, bottom 67
 	local tip = Instance.new("TextLabel")

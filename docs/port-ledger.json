@@ -96,6 +96,31 @@
    "system": "vision fan",
    "evidence": "seamless SurfaceGui sector, lit cone follows the facing (checked cursor right and up-left)",
    "method": "screenshots"
+  },
+  {
+   "system": "player character",
+   "result": "the player's own R15 avatar (LoadCharacter, native Animate, toolnone hold of the store gun as a Tool), fitted to 1.2 m; PlayerControl drives Humanoid:Move + WalkSpeed with the web's ramp/dodge curve, facing through AlignOrientation",
+   "evidence": "Play screenshots; telemetry: walk 4.60 m/s and run 6.89 m/s with the Agile +15% buff (web 4 / 6 x 1.15), dodge 4.46 m"
+  },
+  {
+   "system": "enemy bodies",
+   "result": "Creator Store R15 characters (tools/import_npcs.py, every script stripped; 5 humanoids + a low-poly wolf mesh), server-played default R15 idle/walk/run/hold/slash, fall-on-back death via the Root motor",
+   "evidence": "isolated lineup + in-raid screenshots"
+  },
+  {
+   "system": "enemy AI",
+   "result": "Enemy.ts FSM (init/patrol/alert/combat), brain queues 3+3/frame, hearing (footsteps 8/16 m, gunfire SoundRange), move/trace tasks on the decoded navmesh (server/Nav.luau port of Nav.ts: A*, ClosestOnNode, RaycastModifier Medium), attack loop gate/range/delay/shoot/gap, melee trace+swing, groups with foe sharing, teams (wolves vs scavs), activation 50 m, AI door opening",
+   "evidence": "spec docs/enemy-ai-spec.md; Play tour of 5 map spots x 10 s: up to 7 active, 0 stuck; navmesh build 104-123 ms, paths 5-12 ms"
+  },
+  {
+   "system": "vision fan",
+   "result": "single EditableMesh ring: 120 LOS-clipped rays at 1.25 m eye height (VisionFan.ts), dims rgb(0.03,0.05,0.1) at 50%; no seam line",
+   "evidence": "Play screenshots at 3 facings"
+  },
+  {
+   "system": "level z-fighting",
+   "result": "converter drops exact duplicate meshes and grows each piece by a hashed 0.0044-0.035 stud epsilon",
+   "evidence": "Play screenshots of walls/caps at 3 spots"
   }
  ],
  "open": [
@@ -137,10 +162,6 @@
    "next": "replace with owned/licensed SFX before publishing"
   },
   {
-   "gap": "art: props are restyled collider blocks; grass, river surface, beaver/goose detail",
-   "next": "art pass per docs/art-brief.md"
-  },
-  {
    "gap": "dodge roll i-frames vs explosions, piles from dropped items, Collect All (not rendered in the web either)",
    "next": "later"
   },
@@ -155,6 +176,24 @@
   {
    "gap": "Creator Store models live in the open place (ReplicatedStorage/CreatorAssets); not in Rojo",
    "next": "save the place; tools/import_assets.py rebuilds it"
+  },
+  {
+   "gap": "vision dims only the ground (web: screen-space stencil also dims walls/props outside the fan)",
+   "cause": "no stencil in Roblox",
+   "next": "possible: per-part LocalTransparencyModifier tint or a ViewportFrame mask"
+  },
+  {
+   "gap": "AI heals / grenades / skills / danger flee not ported (AI carry no consumables or throwables yet)",
+   "next": "port AI inventories (gz_presets) then startUse / throw"
+  },
+  {
+   "gap": "path search capped at 4 ms per frame (web: unbounded per frame)",
+   "cause": "Luau cost; latency can exceed one frame under load",
+   "next": "measure with 30+ active AI"
+  },
+  {
+   "gap": "AI-vs-AI damage factor aiCombat() and night perception factors not applied",
+   "next": "port aiCombat ratio and server-side night flag"
   }
  ]
 }

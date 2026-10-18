@@ -188,7 +188,7 @@ function Inventory.start()
 	pcall(function()
 		game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
 	end)
-	game:GetService("ContextActionService"):BindActionAtPriority("CanuckInventory", function(_, state)
+	game:GetService("ContextActionService"):BindActionAtPriority("BlockovInventory", function(_, state)
 		if state == Enum.UserInputState.Begin then
 			Inventory.toggle()
 		end

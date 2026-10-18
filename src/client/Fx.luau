@@ -52,7 +52,7 @@ function Fx.tracer(o: Vector3, yaw: number, slope: number, speed: number, range:
 	-- stop at the first character capsule on the line (hit3d radius 0.5 m), like the server's bullet
 	local chars = Workspace:FindFirstChild("Characters")
 	if chars and not mine then
-		-- someone else's shot can end on anyone, our own beaver included
+		-- someone else's shot can end on anyone, our own character included
 	end
 	if chars then
 		local d2 = Vector2.new(d.X, d.Z)

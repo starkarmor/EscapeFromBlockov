@@ -142,5 +142,54 @@
    "role": "loot container: luxury",
    "fit": "web container size"
   }
+ },
+ "npcs": {
+  "NPC_scrapper": {
+   "id": "2836790988",
+   "title": "Bandit (R15)",
+   "creator": "3Dmewo",
+   "role": "Scav Grunt (scrapper)",
+   "kind": "humanoid",
+   "note": "shipped 8 scripts (Damage, Respawn, Animate...): stripped"
+  },
+  "NPC_scav": {
+   "id": "1328393904",
+   "title": "(R15) Bandit Wolf (plaid bandit)",
+   "creator": "Jackkie5556",
+   "role": "Scav",
+   "kind": "humanoid",
+   "note": "package of 3 identical rigs, first kept; 15 scripts stripped"
+  },
+  "NPC_brute": {
+   "id": "94793747810147",
+   "title": "Enemy Thug NPC Soldier R15",
+   "creator": "(blank name)",
+   "role": "Brute (melee)",
+   "kind": "humanoid",
+   "note": "Runtime + ScreenBuilder backdoor-pattern scripts: stripped"
+  },
+  "NPC_contractor": {
+   "id": "102810892657610",
+   "title": "War People Dummy R15 Soldier",
+   "creator": "(blank name)",
+   "role": "Contractor",
+   "kind": "humanoid",
+   "note": "Runtime + ScreenBuilder backdoor-pattern scripts: stripped"
+  },
+  "NPC_boss": {
+   "id": "5978173188",
+   "title": "SWAT Model (Old Rig & R15 Rig)",
+   "creator": "OfficialMissiePlayz",
+   "role": "Warlord (boss)",
+   "kind": "humanoid",
+   "note": "clean; R6 copy dropped"
+  },
+  "NPC_wolf": {
+   "id": "440929613",
+   "title": "low poly wolf",
+   "creator": "see store",
+   "role": "Wolf (static mesh, procedural trot)",
+   "kind": "static"
+  }
  }
 }

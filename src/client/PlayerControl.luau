@@ -1,9 +1,9 @@
 --!strict
--- The local beaver's movement, 1:1 with src/entities/Player.ts update(): walk 4 / run 6 m/s with 50 / 70 m/s^2
+-- The local player's movement, 1:1 with src/entities/Player.ts update(): walk 4 / run 6 m/s with 50 / 70 m/s^2
 -- acceleration, Shift held to run (stamina >= 20% to start, drains 7/s, recovers 20/s after 1.5 s), Space dodge roll
 -- (0.5 s on the DASH speed curve, 10 stamina, 0.5 s cooldown from the end, i-frames, 0.6 s trigger lock), RMB ADS slows
 -- the walk by the gun's AdsWalkSpeedMultiplier, facing turns toward the aim point at 1200 deg/s (200 while running /
--- moving). Velocity is written to the client-owned root; Roblox physics resolves walls.
+-- moving). The velocity drives the avatar's Humanoid (client-owned); Roblox physics resolves walls.
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -51,6 +51,8 @@ local runToggle = false
 local handoff = false
 local dodgeQueued = false
 local dodgeSent = 0
+local sentSprint = false
+local sentAds = false
 
 local function root(): BasePart?
 	local c = Players.LocalPlayer.Character
@@ -191,6 +193,16 @@ function PC.update(dt: number, cursor: Vector2)
 	end
 	PC.vel = vel
 
+	-- the server hears footsteps from the run / ADS state (World.ts step radius; silent while aiming)
+	if PC.sprinting ~= sentSprint then
+		sentSprint = PC.sprinting
+		Net.event("Sprint"):FireServer(sentSprint)
+	end
+	if PC.adsInput ~= sentAds then
+		sentAds = PC.adsInput
+		Net.event("Aim"):FireServer(sentAds)
+	end
+
 	-- stamina: run drain, recover after the delay (Player.ts STAMINA)
 	if PC.sprinting then
 		spend(ST.drain * dt)
@@ -219,13 +231,21 @@ function PC.update(dt: number, cursor: Vector2)
 		PC.facing += math.clamp(d, -step, step)
 	end
 
-	-- write to the root: horizontal velocity (studs/s), vertical from physics; facing through the AlignOrientation
-	local cur = r.AssemblyLinearVelocity
-	r.AssemblyLinearVelocity = Vector3.new(vel.X * S, math.min(cur.Y, 0), vel.Y * S)
-	r.AssemblyAngularVelocity = Vector3.zero
+	-- drive the avatar's Humanoid with the computed velocity (the ramp, dodge curve and speeds above are the web's;
+	-- the Humanoid resolves walls, steps and slopes) and turn it through the AlignOrientation at the decoded rate
+	local hum = (r.Parent :: Instance):FindFirstChildOfClass("Humanoid")
+	if hum then
+		local sp = vel.Magnitude
+		hum.WalkSpeed = sp * S
+		hum:Move(if sp > 1e-3 then Vector3.new(vel.X / sp, 0, vel.Y / sp) else Vector3.zero, false)
+	else
+		local cur = r.AssemblyLinearVelocity
+		r.AssemblyLinearVelocity = Vector3.new(vel.X * S, math.min(cur.Y, 0), vel.Y * S)
+		r.AssemblyAngularVelocity = Vector3.zero
+	end
 	local align = r:FindFirstChild("Facing") :: AlignOrientation?
 	if align then
-		-- model +z faces the aim; the root's LookVector (-Z) carries it (RigBuilder.FLIP)
+		-- the root's LookVector (-Z) carries the facing (atan2(x, z), 0 = +z)
 		align.CFrame = CFrame.Angles(0, PC.facing + math.pi, 0)
 	end
 end

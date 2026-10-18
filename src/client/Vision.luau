@@ -21,7 +21,7 @@ local params = RaycastParams.new()
 params.CollisionGroup = "QSight"
 params.FilterType = Enum.RaycastFilterType.Exclude
 
-type Tag = { gui: Frame, fill: Frame, lag: Frame, blink: Frame, pop: UIScale, bubble: Frame, root: BasePart, shown: boolean?, hp: number, lagF: number, lagHold: number, blinkT: number, popT: number, alertT: number }
+type Tag = { gui: Frame, fill: Frame, lag: Frame, blink: Frame, pop: UIScale, bubble: TextLabel, root: BasePart, shown: boolean?, hp: number, lagF: number, lagHold: number, blinkT: number, popT: number, alertT: number }
 local tags: { [Model]: Tag } = {}
 -- WorldUI nameplates: name 20 over a 109x20 bar (dark .718; white lag; fill #FFE3C6, glow #FF4545); a hit blinks the bar
 -- #FF5D5D for 0.1 s and pops it to 1.5x (0.25 s), the lag trails 0.35 s; "!" bubble for 1.6 s on entering combat
@@ -123,13 +123,22 @@ local function tagFor(m: Model): Tag?
 	bb.Parent = plateRoot
 	t = { gui = bb, fill = fill, lag = lag, blink = blink, pop = pop, bubble = bubble :: any, root = root, hp = 1, lagF = 1, lagHold = 0, blinkT = 99, popT = 99, alertT = 99 }
 	tags[m] = t
+	-- speech bubbles (Enemy.say): "!" on combat entry, "?" on alert, "Reloading!" from the second empty reload
 	m:GetAttributeChangedSignal("AlertAt"):Connect(function()
 		local tt = tags[m]
 		if tt then
 			tt.alertT = 0
+			tt.bubble.Text = "!"
+			tt.bubble.Size = UDim2.fromOffset(34, 38)
 		end
-		if m:GetAttribute("Kind") ~= "wolf" then
-			require(script.Parent.Sfx).at("honk", root.Position / S, 35)
+	end)
+	m:GetAttributeChangedSignal("SayAt"):Connect(function()
+		local tt = tags[m]
+		local text = m:GetAttribute("Say")
+		if tt and typeof(text) == "string" then
+			tt.alertT = 0
+			tt.bubble.Text = text
+			tt.bubble.Size = UDim2.fromOffset(math.max(34, 14 * #text + 12), 38)
 		end
 	end)
 	return t
@@ -248,62 +257,65 @@ function Vision.update()
 	end
 end
 
--- ------------------------------------------------------------------ vision fan (VisionFan.ts: the ground outside the
--- view cone dims). One flat part under the beaver carries a SurfaceGui disc; the dark sector outside the cone is cut
--- from two clipped halves with stepped gradients (exact sector, no triangle seams), turned to the facing.
-local FAN_R = 40 -- metres
-local fanPart: Part? = nil
-local fanHalves: { UIGradient } = {}
+-- ------------------------------------------------------------------ vision fan (VisionFan.ts): 120 rays from the
+-- player at eye height 1.25 m, reaching the 37 m cone ahead (a 12 deg soft shoulder) and the 1.5 m bubble behind, each
+-- stopped by sight blockers (walls, foliage); everything outside that polygon dims to rgb(0.03, 0.05, 0.1) at 50%.
+-- Drawn as one EditableMesh ring (the polygon cut out of an 80 m disc on the ground): a single mesh has no internal
+-- seams, unlike the earlier two-half SurfaceGui disc whose join showed as a line.
+local RAYS = 120
+local EYE_Y = 1.25
+local R_OUT = 80 -- metres: past the gameplay camera's view
+local fanPart: MeshPart? = nil
+local fanMesh: any = nil
+local inner: { number } = {}
+local fanFailed = false
 
-local function buildFan()
-	local part = Instance.new("Part")
-	part.Name = "VisionFan"
-	part.Anchored = true
-	part.CanCollide = false
-	part.CanQuery = false
-	part.CanTouch = false
-	part.CastShadow = false
-	part.Transparency = 1
-	part.Size = Vector3.new(FAN_R * 2 * S, 0.05, FAN_R * 2 * S)
-	local sg = Instance.new("SurfaceGui")
-	sg.Face = Enum.NormalId.Top
-	sg.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
-	sg.CanvasSize = Vector2.new(1024, 1024)
-	sg.LightInfluence = 0
-	sg.AlwaysOnTop = false
-	sg.Parent = part
-	for i = 1, 2 do
-		local right = i == 1
-		local clip = Instance.new("Frame")
-		clip.BackgroundTransparency = 1
-		clip.ClipsDescendants = true
-		clip.Size = UDim2.fromOffset(512, 1024)
-		clip.Position = UDim2.fromOffset(if right then 512 else 0, 0)
-		clip.Parent = sg
-		local disc = Instance.new("Frame")
-		disc.BorderSizePixel = 0
-		disc.BackgroundColor3 = Color3.fromRGB(16, 18, 40)
-		disc.BackgroundTransparency = 0.5
-		disc.Size = UDim2.fromOffset(1024, 1024)
-		disc.Position = UDim2.fromOffset(if right then -512 else 0, 0)
-		local c = Instance.new("UICorner")
-		c.CornerRadius = UDim.new(1, 0)
-		c.Parent = disc
-		local g = Instance.new("UIGradient")
-		g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.499, 0), NumberSequenceKeypoint.new(0.5, 1), NumberSequenceKeypoint.new(1, 1) })
-		g.Parent = disc
-		disc.Parent = clip
-		fanHalves[i] = g
+local function buildFan(): boolean
+	local AssetService = game:GetService("AssetService")
+	local ok, err = pcall(function()
+		local em = AssetService:CreateEditableMesh()
+		local outer = {}
+		for i = 0, RAYS - 1 do
+			local a = (i / RAYS) * math.pi * 2 - math.pi
+			inner[i + 1] = em:AddVertex(Vector3.zero)
+			outer[i + 1] = em:AddVertex(Vector3.new(math.sin(a), 0, math.cos(a)) * R_OUT * S)
+		end
+		for i = 1, RAYS do
+			local j = i % RAYS + 1
+			-- both windings: the top face shows from above, the other is culled (no double blending)
+			em:AddTriangle(inner[i], outer[i], outer[j])
+			em:AddTriangle(inner[i], outer[j], inner[j])
+			em:AddTriangle(inner[i], outer[j], outer[i])
+			em:AddTriangle(inner[i], inner[j], outer[j])
+		end
+		local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+		part.Name = "VisionFan"
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.CastShadow = false
+		part.Material = Enum.Material.SmoothPlastic
+		part.Color = Color3.new(0.03, 0.05, 0.1)
+		part.Transparency = 0.5
+		fanPart = part
+		fanMesh = em
+	end)
+	if not ok then
+		warn("[Blockov] vision fan mesh unavailable: " .. tostring(err))
+		fanFailed = true
 	end
-	part.Parent = Workspace:FindFirstChild("LocalFx") or Workspace
-	fanPart = part
+	return ok
 end
 
 function Vision.fan(alive: boolean)
-	if not fanPart then
+	if not fanPart and not fanFailed then
 		buildFan()
 	end
-	local part = fanPart :: Part
+	local part = fanPart
+	if not part then
+		return
+	end
 	if not alive then
 		part.Parent = nil
 		return
@@ -311,14 +323,23 @@ function Vision.fan(alive: boolean)
 	part.Parent = Workspace:FindFirstChild("LocalFx") or Workspace
 	local V = Config.View
 	local nm = if night() then V.nightMul else { 1, 1, 1 }
-	local cone = V.angle * nm[1]
-	-- dark fraction clockwise from the gui top, starting at the cone's clockwise edge
-	local p = (360 - cone) / 360
-	fanHalves[1].Rotation = math.min(p, 0.5) * 360
-	fanHalves[2].Rotation = 180 + math.max(0, p - 0.5) * 360
-	-- measured in Studio: this turn puts the lit sector on the facing (checked with the cursor right and up-left)
-	local yaw = PC.facing
-	part.CFrame = CFrame.new(PC.pos.X * S, 0.08 * S, PC.pos.Y * S) * CFrame.Angles(0, yaw + math.pi / 2 - math.rad(cone / 2), 0)
+	local half = math.rad(V.angle * nm[1]) / 2
+	local range = V.dist * nm[2]
+	local bubble = V.bubble * nm[3]
+	local x, z, facing = PC.pos.X, PC.pos.Y, PC.facing
+	local eye = Vector3.new(x, EYE_Y, z) * S
+	for i = 0, RAYS - 1 do
+		local a = (i / RAYS) * math.pi * 2 - math.pi
+		local off = math.abs(math.atan2(math.sin(a - facing), math.cos(a - facing)))
+		local edge = math.clamp((half + 0.2 - off) / 0.2, 0, 1)
+		local reach = bubble + (math.max(bubble, range) - bubble) * edge
+		local dir = Vector3.new(math.sin(a), 0, math.cos(a))
+		local hit = Workspace:Raycast(eye, dir * reach * S, params)
+		local r = if hit then (Vector2.new(hit.Position.X, hit.Position.Z) / S - Vector2.new(x, z)).Magnitude else reach
+		fanMesh:SetPosition(inner[i + 1], dir * r * S)
+	end
+	-- the mesh is centred on the player (the outer ring keeps the bounds fixed), just over the floor
+	part.CFrame = CFrame.new(x * S, 0.06 * S, z * S)
 end
 
 --- the enemy head under a viewport point, if any (ray vs each visible enemy's Head part box)

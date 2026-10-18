@@ -16,7 +16,7 @@ local Units = require(Shared.Units)
 local Net = require(Shared.Net)
 local Guns = require(Shared.Guns)
 local MapData = require(Shared.MapData)
-local RigBuilder = require(Shared.RigBuilder)
+local Avatar = require(script.Parent.Avatar)
 local Weapons = require(script.Parent.Weapons)
 
 local S = Units.S
@@ -261,14 +261,18 @@ function Raid.deploy(p: Player)
 	if p.Character then
 		p.Character:Destroy()
 	end
-	local model = RigBuilder.build("player", p.DisplayName)
+	-- the player's own Roblox avatar (R15, the experience's Animate), fitted to the web character's size and rules
+	p:LoadCharacter()
+	local model = p.Character
+	if not model or not raids[p] then
+		return
+	end
+	Avatar.prepare(model)
 	model:SetAttribute("Held", "gun")
 	model:SetAttribute("UserId", p.UserId)
-	model:PivotTo(CFrame.new(spot.X * S, RigBuilder.ROOT_R + 0.2, spot.Y * S) * CFrame.Angles(0, math.pi, 0))
+	Avatar.place(model, spot.X, spot.Y, 0)
 	model.Parent = charFolder
-	p.Character = model
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
-	root:SetNetworkOwner(p)
 	-- a name tag in the brief's style
 	local bb = Instance.new("BillboardGui")
 	bb.Size = UDim2.fromOffset(160, 30)
@@ -420,7 +424,7 @@ function Raid.die(p: Player, info: any)
 	Weapons.targets[p] = nil
 	Weapons.cancelReload(p)
 	syncVitals(p)
-	-- World.update: the beaver falls on its back (0.333 s, clients animate from DeadAt) and stays; its body holds
+	-- World.update: the player falls on its back (0.333 s, clients animate from DeadAt) and stays; its body holds
 	-- the gear ("Lost Items", pre-revealed, cyan beacon) for one recovery
 	local char = p.Character
 	if char then

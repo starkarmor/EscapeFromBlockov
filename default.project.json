@@ -1,5 +1,5 @@
 {
-  "name": "EscapeFromCanuckov",
+  "name": "EscapeFromBlockov",
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
@@ -18,7 +18,8 @@
         "CharacterUseJumpPower": true,
         "CameraMaxZoomDistance": 400,
         "DevComputerMovementMode": "KeyboardMouse",
-        "DevComputerCameraMovementMode": "Classic"
+        "DevComputerCameraMovementMode": "Classic",
+        "GameSettingsAvatar": "R15"
       },
       "StarterPlayerScripts": {
         "Client": {
@@ -27,7 +28,7 @@
       }
     },
     "MaterialService": {
-      "CanuckStuds": {
+      "BlockovStuds": {
         "$className": "MaterialVariant",
         "$properties": {
           "BaseMaterial": "Plastic",

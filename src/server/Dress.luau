@@ -195,8 +195,90 @@ local function gunModel(id: string): string
 	return "GunRifle"
 end
 
---- weld the held gun's model to a character's Weapon part (replaces the previous one)
+-- the held item on a humanoid (avatar or store enemy): a Tool in the character so Roblox's own grip and Animate's
+-- one-arm hold (toolnone) / toolanim Slash carry it. The R15 grip attachment points the Handle's -Z out of the fist,
+-- along the raised arm, and its +Y up.
+local STICK = Color3.fromRGB(0x8B, 0x5A, 0x2B)
+local function holdTool(char: Model, gunId: string?, held: any)
+	local old = char:FindFirstChild("HeldTool")
+	if old then
+		old:Destroy()
+	end
+	if char:GetAttribute("Dead") then
+		return
+	end
+	local tool = Instance.new("Tool")
+	tool.Name = "HeldTool"
+	tool.CanBeDropped = false
+	tool.ManualActivationOnly = true
+	tool.RequiresHandle = true
+	local handle = Instance.new("Part")
+	handle.Name = "Handle"
+	handle.Size = Vector3.new(0.2, 0.2, 0.2)
+	handle.Transparency = 1
+	handle.CanCollide = false
+	handle.CanQuery = false
+	handle.CanTouch = false
+	handle.Massless = true
+	handle.CFrame = CFrame.identity
+	handle.Parent = tool
+	if held == "gun" and gunId then
+		local it = Guns.items[gunId]
+		local lenStuds = ((it and it.fire and it.fire.length) or 0.5) * S
+		local m = sized(gunModel(gunId), lenStuds, "X")
+		if not m then
+			return
+		end
+		-- model +X (muzzle) onto the Handle's -Z; the fist a quarter length behind the centre, under the receiver
+		m:PivotTo(CFrame.new(0, 0.12 * lenStuds, -0.22 * lenStuds) * CFrame.Angles(0, math.pi / 2, 0))
+		for _, p in m:GetDescendants() do
+			if p:IsA("BasePart") then
+				p.Anchored = false
+				p.Massless = true
+				p.CanCollide = false
+				p.CanQuery = false
+				p.CanTouch = false
+				p.CastShadow = false
+				local w = Instance.new("Weld")
+				w.Part0 = handle
+				w.Part1 = p
+				w.C0 = handle.CFrame:ToObjectSpace(p.CFrame)
+				w.Parent = p
+			end
+		end
+		m.Parent = tool
+		tool:SetAttribute("Gun", gunId)
+	elseif held == "melee" then
+		-- the Wooden Stick (0.75 m), standing up out of the fist
+		local stick = Instance.new("Part")
+		stick.Name = "Stick"
+		stick.Size = Vector3.new(0.09 * S, 0.75 * S, 0.09 * S)
+		stick.Color = STICK
+		stick.Material = Enum.Material.Wood
+		stick.CanCollide = false
+		stick.CanQuery = false
+		stick.CanTouch = false
+		stick.Massless = true
+		stick.CFrame = CFrame.new(0, 0.3 * S, 0)
+		local w = Instance.new("Weld")
+		w.Part0 = handle
+		w.Part1 = stick
+		w.C0 = CFrame.new(0, 0.3 * S, 0)
+		w.Parent = stick
+		stick.Parent = tool
+	else
+		return
+	end
+	tool.Parent = char
+end
+
+--- the held item model on a character (replaces the previous one): humanoids get a Tool; block rigs a weld on
+--- their Weapon part
 function Dress.arm(char: Model, gunId: string?)
+	if char:FindFirstChildOfClass("Humanoid") then
+		holdTool(char, gunId, char:GetAttribute("Held"))
+		return
+	end
 	local weapon = char:FindFirstChild("Weapon") :: BasePart?
 	if not weapon then
 		return
@@ -235,6 +317,20 @@ function Dress.arm(char: Model, gunId: string?)
 	weapon.Transparency = 1
 end
 
+--- Animate's toolanim "Slash" on the held tool (the melee swing on a humanoid)
+function Dress.slash(char: Model)
+	local tool = char:FindFirstChild("HeldTool")
+	if tool then
+		local v = Instance.new("StringValue")
+		v.Name = "toolanim"
+		v.Value = "Slash"
+		v.Parent = tool
+		task.delay(0.5, function()
+			v:Destroy()
+		end)
+	end
+end
+
 --- oil barrel look for Breakables (returns the visual model, nil when the asset is missing)
 function Dress.barrel(at: CFrame, height: number): Model?
 	local m = sized("Barrel", height, "Y")
@@ -246,14 +342,14 @@ end
 
 function Dress.start()
 	if not assets then
-		print("[Canuckov] no CreatorAssets folder: block stand-ins kept (run tools/import_assets.py)")
+		print("[Blockov] no CreatorAssets folder: block stand-ins kept (run tools/import_assets.py)")
 		return
 	end
 	local map = Workspace:WaitForChild("GroundZero")
 	local t = dressTrees(map)
 	local b = dressBushes(map)
 	local rk = dressRocks(map)
-	print(string.format("[Canuckov] dressed %d pines, %d bushes, %d rocks", t, b, rk))
+	print(string.format("[Blockov] dressed %d pines, %d bushes, %d rocks", t, b, rk))
 	-- held guns on every character (players: the player's Gun attribute; enemies: their own "Gun" attribute)
 	local function watch(char: Model)
 		local function refresh()
@@ -263,6 +359,10 @@ function Dress.start()
 		end
 		char:GetAttributeChangedSignal("Held"):Connect(refresh)
 		char:GetAttributeChangedSignal("Gun"):Connect(refresh)
+		char:GetAttributeChangedSignal("Dead"):Connect(refresh)
+		char:GetAttributeChangedSignal("MeleeAt"):Connect(function()
+			Dress.slash(char)
+		end)
 		local plr = Players:GetPlayerFromCharacter(char)
 		if plr then
 			plr:GetAttributeChangedSignal("Gun"):Connect(function()

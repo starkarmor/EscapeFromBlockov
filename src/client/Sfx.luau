@@ -16,7 +16,6 @@ local IDS: { [string]: { id: string, vol: number, pitch: { number }? } } = {
 	hitmarker = { id = "3748776946", vol = 0.45 },
 	swoosh = { id = "12222200", vol = 0.6, pitch = { 0.9, 1.1 } },
 	step = { id = "129956418693357", vol = 0.18, pitch = { 0.9, 1.1 } },
-	honk = { id = "4139639790", vol = 0.6, pitch = { 0.85, 1.15 } },
 	hurt = { id = "95887429435303", vol = 0.5, pitch = { 1.1, 1.3 } },
 	door = { id = "7274931838", vol = 0.5 },
 	bandage = { id = "9113266339", vol = 0.5 },

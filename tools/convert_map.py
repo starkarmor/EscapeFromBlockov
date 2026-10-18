@@ -169,7 +169,7 @@ for s, tx, ty, w, h in rects:
                            material='SmoothPlastic', transparency=0.1, attrs={'Surface': 'water', 'Cat': 0}, cast=False, group='Ground'))
     else:
         ground.append(part('Ground', 'Part', (sp(cx), -GROUND_T / 2, sp(cz)), (sp(ww), GROUND_T, sp(hh)), rgb,
-                           variant='CanuckStuds' if s in ('grass', 'mud', 'ledge') else '', attrs={'Surface': s, 'Cat': 0}, cast=False, group='Ground'))
+                           variant='BlockovStuds' if s in ('grass', 'mud', 'ledge') else '', attrs={'Surface': s, 'Cat': 0}, cast=False, group='Ground'))
 # apron beyond the playable bounds
 bx0, bx1, bz0, bz1 = ox, ox + W * cell, oz, oz + H * cell
 ground.append(part('Apron', 'Part', (sp((bx0 + bx1) / 2), -GROUND_T / 2 - 0.2, sp((bz0 + bz1) / 2)), (sp(bx1 - bx0 + 300), GROUND_T, sp(bz1 - bz0 + 300)), P['forest'], collide=False, query=False, cast=False))
@@ -277,9 +277,15 @@ def group_role(grp):
 # ---------------------------------------------------------------- props from the web export
 props, rocks, caps, bushes = [], [], [], []
 counts = {}
+seen_keys = set()
+zf = [0]
 for m in d['meshes']:
     t = m['g']['t']
     if t not in ('box', 'cyl'): continue
+    # exact duplicates (the decoder ships some colliders twice) draw once
+    dkey = (t, tuple(round(v, 3) for v in m['p']), tuple(round(v, 4) for v in m['q']), tuple(round(v, 3) for v in m['s']), json.dumps(m['g'], sort_keys=True), (m['m'] or {}).get('c'))
+    if dkey in seen_keys: continue
+    seen_keys.add(dkey)
     col = (m['m'] or {}).get('c')
     if col in ('#6e5236', '#8a6a46'):
         continue  # construction-site debris / planks: the Sites folder owns them
@@ -340,7 +346,7 @@ for m in d['meshes']:
     kids = [part('Trunk', 'Part', (x, sp(0.6 * sc), z), (sp(0.5 * sc), sp(1.2 * sc), sp(0.5 * sc)), P['bark'], R, attrs={'Cat': 27, 'Kind': 'tree'}, group='M27')]
     for k, (y0, w0, hh) in enumerate([(1.0, 2.8, 1.3), (2.1, 2.1, 1.2), (3.1, 1.3, 1.1)]):
         kids.append(part('Leaves', 'Part', (x, sp((y0 + hh / 2) * sc), z), (sp(w0 * sc), sp(hh * sc), sp(w0 * sc)), green, R,
-                         collide=False, query=False, attrs={'Cat': 0, 'Kind': 'leaves'}, variant='CanuckStuds', group='M0'))
+                         collide=False, query=False, attrs={'Cat': 0, 'Kind': 'leaves'}, variant='BlockovStuds', group='M0'))
     trees.append(model('Pine', kids))
 
 world = folder('GroundZero', [folder('Ground', ground), folder('Colliders', colliders), folder('Rocks', rocks), folder('Props', props), folder('Bushes', bushes), folder('Caps', caps), folder('Trees', trees), folder('Sites', site_folders)])

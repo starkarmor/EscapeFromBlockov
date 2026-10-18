@@ -272,8 +272,8 @@ function Loot.addBox(kind: string, x: number, z: number, label: string, items: {
 	local root = model and model:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if root then
 		-- the fallen body itself is the container (World.dropBody: no mesh of its own)
+		root:SetAttribute("BoxName", label) -- before Box: the client reads the label when Box appears
 		root:SetAttribute("Box", id)
-		root:SetAttribute("BoxName", label)
 		b.part = root
 	else
 		makeProp(b)
@@ -534,9 +534,37 @@ function Loot.start()
 		leaf.CFrame = closed
 		leaf.Parent = doorFolder
 		local b: Box = { id = d.id, kind = "door", x = d.x, z = d.z, r = 1.8, label = if d.key then "Unlock" else "Open", hold = d.interactTime or 0.2, table = nil, container = nil, rolled = true, items = {}, part = nil,
-			data = { open = false, key = d.key, keyUse = d.keyUse, part = leaf, closedCf = closed, openCf = openCf } }
+			data = { open = false, key = d.key, keyUse = d.keyUse, part = leaf, closedCf = closed, openCf = openCf, box = bx } }
 		boxes[b.id] = b
 		Workspace:SetAttribute("Door_" .. b.id, false)
+	end
+	-- World.aiOpenDoor: an AI walking into a closed, unlocked, unkeyed door opens it (within width / 2 + r along the
+	-- leaf and 0.36 + r across)
+	local aiDoors = {}
+	for _, b in boxes do
+		if b.kind == "door" and not b.data.key then
+			table.insert(aiDoors, b)
+		end
+	end
+	Enemies.openDoor = function(pos: Vector2, r: number)
+		for _, b in aiDoors do
+			local d = b.data
+			if d.open then
+				continue
+			end
+			local bx = d.box
+			local w, dz = bx.maxX - bx.minX, bx.maxZ - bx.minZ
+			local cx, cz = (bx.minX + bx.maxX) / 2, (bx.minZ + bx.maxZ) / 2
+			local along, across = if w >= dz then math.abs(pos.X - cx) else math.abs(pos.Y - cz), if w >= dz then math.abs(pos.Y - cz) else math.abs(pos.X - cx)
+			if along <= math.max(w, dz) / 2 + r and across <= 0.36 + r then
+				d.open = true
+				Workspace:SetAttribute("Door_" .. b.id, true)
+				local leaf: BasePart = d.part
+				leaf.CanCollide = false
+				TweenService:Create(leaf, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { CFrame = d.openCf }):Play()
+				publish(b)
+			end
+		end
 	end
 	for _, it in MapData.interacts do
 		if it.kind == "construct" then
@@ -606,7 +634,7 @@ function Loot.start()
 			column(it.x, it.z, 1.2, 3.5, "BUNKER")
 		end
 	end
-	print(string.format("[Canuckov] %d containers this raid", n))
+	print(string.format("[Blockov] %d containers this raid", n))
 	-- the dead player's body: "Lost Items", everything pre-revealed (the tomb), a cyan beacon over it
 	Raid.onCorpse(function(pos, name, items, model)
 		local list = {}

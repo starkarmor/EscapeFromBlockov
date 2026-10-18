@@ -5,7 +5,7 @@
 local PhysicsService = game:GetService("PhysicsService")
 
 local Physics = {}
-local GROUPS = { "Ground", "M0", "M1", "M4", "M27", "M31", "Chars", "QBullet", "QSight", "QBody" }
+local GROUPS = { "Ground", "M0", "M1", "M4", "M27", "M31", "Chars", "QBullet", "QSight", "QSightHard", "QBody" }
 
 function Physics.setup()
 	for _, g in GROUPS do
@@ -20,9 +20,11 @@ function Physics.setup()
 			PhysicsService:CollisionGroupSetCollidable(g, o, table.find(with, o) ~= nil)
 		end
 	end
-	only("Chars", { "Ground", "M1", "M27", "M31", "Chars", "Default" })
+	-- characters pass through each other (World.ts resolveCircle: bodies collide with boxes only)
+	only("Chars", { "Ground", "M1", "M27", "M31", "Default" })
 	only("QBullet", { "M27", "M31" })
 	only("QSight", { "M4", "M31" })
+	only("QSightHard", { "M31" }) -- hurt searches see through foliage
 	only("QBody", { "M1", "M27", "M31" })
 	only("M0", {})
 	only("M4", { "QSight" })

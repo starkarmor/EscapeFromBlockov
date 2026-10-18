@@ -17,4 +17,4 @@ end
 require(script.Parent.Actions).start()
 require(script.Parent.Dress).start()
 require(script.Parent.Breakables).start()
-print("[Canuckov] server ready")
+print("[Blockov] server ready")

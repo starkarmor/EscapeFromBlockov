@@ -167,6 +167,13 @@ export type EnemyDef = {
 	turnPatrol: number,
 	turnCombat: number,
 	mv: number?,
+	critGain: number?,
+	traceChance: { number }?,
+	dash: { number }?,
+	shootCanMove: boolean?,
+	rangeMul: number?,
+	hearing: number?,
+	scale: number?,
 	hitRadius: number,
 	exp: number,
 }
@@ -180,26 +187,29 @@ local function def(t: any): EnemyDef
 	t.exp = t.exp or 15
 	t.turnPatrol = t.turnPatrol or 400
 	t.turnCombat = t.turnCombat or 1200
+	-- Enemy.ts: traceChance rolled once per spawn; melee kinds always follow the noise
+	t.traceChance = t.traceChance or (if t.melee then { 1, 1 } else { 0.3, 0.7 })
 	return t
 end
-Config.Enemies.scrapper = def({ kind = "scrapper", name = "Scrappy Goose", rig = "scrapper", hp = 35, dmgMul = 0.82, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
+Config.Enemies.scrapper = def({ kind = "scrapper", name = "Scav Grunt", rig = "NPC_scrapper", critGain = -0.3, hp = 35, dmgMul = 0.82, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
 	shootTime = { 0.2, 0.5 }, shootGap = { 1.0, 1.5 }, scatterMul = 0.65, bulletSpeedMul = 0.65, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 },
 	weapons = { { "toz66", 15 }, { "tt33", 25 }, { "pm", 25 } }, team = 1 })
-Config.Enemies.scav = def({ kind = "scav", name = "Honker", rig = "scav", hp = 45, dmgMul = 0.9, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
+Config.Enemies.scav = def({ kind = "scav", name = "Scav", rig = "NPC_scav", hp = 45, dmgMul = 0.9, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
 	shootTime = { 0.2, 0.5 }, shootGap = { 1.1, 1.8 }, scatterMul = 0.65, bulletSpeedMul = 0.75, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 },
 	weapons = { { "shotgun_homemade", 10 }, { "mp155", 10 }, { "g17", 10 }, { "bow", 3 }, { "ak47", 5 }, { "ak103", 1 }, { "ak74u", 8 }, { "adar", 4 } }, team = 1 })
-Config.Enemies.brute = def({ kind = "brute", name = "Moose Brute", rig = "brute", hp = 60, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 1.0, shootDelay = 0.2, mv = 1.15,
+Config.Enemies.brute = def({ kind = "brute", name = "Brute", rig = "NPC_brute", scale = 1.1, hp = 60, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 1.0, shootDelay = 0.2, mv = 1.15,
 	shootTime = { 0.3, 0.75 }, shootGap = { 0.5, 1.5 }, scatterMul = 0.35, bulletSpeedMul = 0.75, forget = 8, patrolRange = 8, combatMoveRange = 3.5, combatMoveTime = { 1, 3 },
 	weapons = {}, melee = { damage = 27, range = 1.55, interval = 1 / 2.2, bleed = 0.5, critRate = 0.2, critMul = 1.6 }, team = 1 })
-Config.Enemies.contractor = def({ kind = "contractor", name = "Elite Contract Goose", rig = "contractor", hp = 60, dmgMul = 1, sight = 16, sightAngle = 100, reaction = 0.55, shootDelay = 0.25,
+Config.Enemies.contractor = def({ kind = "contractor", name = "Contractor", rig = "NPC_contractor", hp = 60, dmgMul = 1, sight = 16, sightAngle = 100, reaction = 0.55, shootDelay = 0.25,
 	shootTime = { 0.4, 0.8 }, shootGap = { 0.8, 2.2 }, scatterMul = 0.5, bulletSpeedMul = 1, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
 	weapons = { { "m4a1", 10 }, { "mp7", 8 }, { "ump45", 8 }, { "mp155", 8 }, { "mp5", 10 }, { "vector", 8 } }, team = 3 })
-Config.Enemies.boss = def({ kind = "boss", name = "Black Bear Warlord", rig = "boss", hp = 160, dmgMul = 1, sight = 17, sightAngle = 140, reaction = 0.45, shootDelay = 0.15,
+Config.Enemies.boss = def({ kind = "boss", name = "Warlord", rig = "NPC_boss", scale = 1.2, hp = 160, dmgMul = 1, sight = 17, sightAngle = 140, reaction = 0.45, shootDelay = 0.15,
 	shootTime = { 1, 2 }, shootGap = { 1.3, 2.3 }, scatterMul = 0.4, bulletSpeedMul = 0.9, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
 	weapons = { { "ak47", 1 } }, hitRadius = 0.7, team = 3, exp = 100 })
-Config.Enemies.wolf = def({ kind = "wolf", name = "Wolverine", rig = "wolf", hp = 40, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 0.2, shootDelay = 0.2, mv = 1.3,
+Config.Enemies.wolf = def({ kind = "wolf", name = "Wolf", rig = "NPC_wolf", hp = 40, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 0.2, shootDelay = 0.2, mv = 1.3,
 	shootTime = { 0.2, 0.2 }, shootGap = { 0, 0 }, scatterMul = 0.35, bulletSpeedMul = 1, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
-	weapons = {}, melee = { damage = 25, range = 2, interval = 1 / 1.3, bleed = 0.5, critRate = 0.15, critMul = 1.15 }, hitRadius = 0.65, team = 8 })
+	weapons = {}, melee = { damage = 25, range = 2, interval = 1 / 1.3, bleed = 0.5, critRate = 0.15, critMul = 1.15 }, hitRadius = 0.65, team = 8,
+	dash = { 1, 1.2 }, shootCanMove = true })
 
 -- Enemy AI limits (Enemy.ts AI const)
 Config.AI = { trackRange = 20, meleeTrackRange = 24, activeDistance = 50, alertSightMul = 1.25, reacquireSightMul = 1.5, lostWait = 0.25 }

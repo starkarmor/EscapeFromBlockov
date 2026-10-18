@@ -49,7 +49,7 @@ Interact.start()
 Results.start()
 Inventory.start()
 
-ContextActionService:BindActionAtPriority("CanuckDodge", function(_, state)
+ContextActionService:BindActionAtPriority("BlockovDodge", function(_, state)
 	if state == Enum.UserInputState.Begin then
 		PC.requestDodge()
 	end
@@ -83,7 +83,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 local snapped = false
-RunService:BindToRenderStep("Canuckov3C", Enum.RenderPriority.Camera.Value + 1, function(dt)
+RunService:BindToRenderStep("Blockov3C", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	dt = math.min(dt, 0.1)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
