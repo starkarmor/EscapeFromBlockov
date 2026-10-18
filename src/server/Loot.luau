@@ -657,12 +657,23 @@ function Loot.start()
 		b.data = { beacon = beacon }
 	end)
 	-- enemy bodies: "Body", the carried loot unrevealed (the gun with what is left in its magazine + the body table)
-	Enemies.onCorpse(function(pos, name, kind, model, gun)
+	Enemies.onCorpse(function(pos, name, kind, model, gun, worn, carried)
 		local body = Items.bodies[kind]
 		local list: { Item } = {}
+		-- the armor / helmet the enemy wore drops with its remaining durability
+		for _, g in worn or {} do
+			table.insert(list, { id = g.id, n = 1, revealed = false, dur = g.dur } :: any)
+		end
 		if gun and Items.items[gun] then
 			local cap = (Items.gunFeel[gun] or {}).Capacity or 8
 			table.insert(list, { id = gun, n = 1, revealed = false, ammo = math.random(0, cap) })
+		end
+		-- what the enemy still carries (rolled at spawn from its body table; heals and grenades it used are gone)
+		if carried then
+			for _, st in carried do
+				table.insert(list, { id = st.id, n = st.n, revealed = false, ammo = if Items.items[st.id] and Items.items[st.id].fire then math.random(0, 5) else nil })
+			end
+			body = nil
 		end
 		if body then
 			for _, d in body.drops do

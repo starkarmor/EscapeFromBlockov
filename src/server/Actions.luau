@@ -53,6 +53,10 @@ local function melee(p: Player)
 		end
 		local look = root.CFrame.LookVector
 		local fwd = Vector2.new(look.X, look.Z).Unit
+		do
+			local crit = math.random() < m.critRate
+			require(script.Parent.Cover).melee(pos.X, pos.Z, math.atan2(fwd.X, fwd.Y), m.range + m.reach, m.damage * (if crit then m.critMul else 1))
+		end
 		for key, t in Weapons.targets do
 			if t.team == 0 then
 				continue
@@ -128,7 +132,48 @@ local function finishUse(p: Player, id: string)
 end
 
 function Actions.start()
+	-- throwing (World.handleThrow): the held throwable, 0.5 s cooldown, one item per throw, never while rolling
+	local lastThrow: { [Player]: number } = {}
+	Net.event("Throw").OnServerEvent:Connect(function(p, id, aim)
+		local r = Raid.raids[p]
+		if not r or not r.alive or typeof(id) ~= "string" or typeof(aim) ~= "Vector2" then
+			return
+		end
+		local Grenades = require(script.Parent.Grenades)
+		local row = Grenades.row(id)
+		local now = os.clock()
+		if not row or now - (lastThrow[p] or -math.huge) < 0.45 or Raid.count(r.bag, id) <= 0 then
+			return
+		end
+		if Weapons.isDodging and Weapons.isDodging(p) then
+			return
+		end
+		local root = Raid.rootOf(p)
+		local pos = Raid.posOf(p)
+		if not root or not pos then
+			return
+		end
+		lastThrow[p] = now
+		Raid.take(r.bag, id, 1)
+		Raid.sendBag(p)
+		local look = root.CFrame.LookVector
+		Grenades.launch(id, pos.X, pos.Z, math.atan2(look.X, look.Z), aim.X, aim.Y, { team = 0, from = p })
+		if Raid.count(r.bag, id) <= 0 then
+			setHeld(p, "gun")
+			if p.Character then
+				p.Character:SetAttribute("Held", "gun")
+			end
+			Weapons.syncAmmo(p)
+		end
+	end)
 	Net.event("SelectSlot").OnServerEvent:Connect(function(p, slot)
+		if slot == "throw" then
+			Actions.cancelUse(p)
+			if p.Character then
+				p.Character:SetAttribute("Held", "throw")
+			end
+			return
+		end
 		if slot == "gun" or slot == "gun2" or slot == "melee" then
 			Actions.cancelUse(p)
 			setHeld(p, slot)

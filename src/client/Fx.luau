@@ -143,6 +143,17 @@ function Fx.explode(at: Vector3, radius: number)
 	end)
 end
 
+--- flashbang: a white burst, no fireball (the source has no whiteout)
+function Fx.flash(at: Vector3, radius: number)
+	local cf = CFrame.new(at.X * S, 0.6 * S, at.Z * S)
+	local core = neon(Vector3.one * 1.5, cf, WHITE)
+	core.Shape = Enum.PartType.Ball
+	TweenService:Create(core, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.one * radius * S * 1.4, Transparency = 1 }):Play()
+	task.delay(0.3, function()
+		core:Destroy()
+	end)
+end
+
 -- ------------------------------------------------------------------ blood (World.burst / addDecal, Character flash)
 type Cube = { part: Part, v: Vector3, life: number, t: number }
 local cubes: { Cube } = {}

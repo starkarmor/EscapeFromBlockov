@@ -27,9 +27,15 @@ local Weapons = require(script.Parent.Weapons)
 local Raid = require(script.Parent.Raid)
 local Nav = require(script.Parent.Nav)
 local Avatar = require(script.Parent.Avatar)
+local Cover = require(script.Parent.Cover)
+local Grenades = require(script.Parent.Grenades)
+local Weather = require(script.Parent.Weather)
+local Items = require(Shared.gen.Items)
 
 local S = Units.S
 local Enemies = {}
+-- TimeOfDayPost angle factor for AI sight (the weather sets it; Sunny night 0.4)
+Enemies.nightAngle = 1
 
 -- Enemy.ts AI constants
 local SENSE = 1.5
@@ -160,6 +166,22 @@ export type Enemy = {
 	lastSwing: number,
 	stepT: number,
 	tracks: { [string]: AnimationTrack },
+	armor: { id: string, value: number, dur: number }?,
+	stunUntil: number?,
+	lastAttacker: any,
+	items: { { id: string, n: number } },
+	useT: number,
+	useId: string?,
+	useStand: boolean,
+	healCheckT: number,
+	skillCheckT: number,
+	throwT: number,
+	throwId: string?,
+	throwAt: Vector2?,
+	danger: any,
+	fleeT: number,
+	dangerSaid: number,
+	helmet: { id: string, value: number, dur: number }?,
 	anim: string,
 }
 
@@ -214,6 +236,9 @@ end
 local pState: { [Player]: { sprint: boolean, ads: boolean, stepT: number } } = {}
 
 local function say(e: Enemy, text: string)
+	if e.def.canTalk == false then
+		return
+	end
 	e.model:SetAttribute("Say", text)
 	e.model:SetAttribute("SayAt", Workspace:GetServerTimeNow())
 end
@@ -242,8 +267,8 @@ function Enemies.hear(x: number, z: number, radius: number, kind: number, team: 
 	end
 end
 
-local corpseHook: ((Vector3, string, string, Model, string?) -> ())? = nil
-function Enemies.onCorpse(fn: (Vector3, string, string, Model, string?) -> ())
+local corpseHook: ((Vector3, string, string, Model, string?, { any }?, { any }?) -> ())? = nil
+function Enemies.onCorpse(fn: (Vector3, string, string, Model, string?, { any }?, { any }?) -> ())
 	corpseHook = fn
 end
 Enemies.openDoor = nil :: ((Vector2, number) -> ())? -- Loot: aiOpenDoor
@@ -287,7 +312,13 @@ local function die(e: Enemy, info: any)
 		end
 	end
 	if corpseHook then
-		corpseHook(Vector3.new(e.pos.X, 0, e.pos.Y), e.def.name, e.def.kind, e.model, if e.def.melee then nil else e.gun)
+		local worn = {}
+		for _, g in { e.armor, e.helmet } do
+			if g and g.id ~= "" then
+				table.insert(worn, { id = g.id, dur = g.dur })
+			end
+		end
+		corpseHook(Vector3.new(e.pos.X, 0, e.pos.Y), e.def.name, e.def.kind, e.model, if e.def.melee or Guns.items[e.gun] == nil then nil else e.gun, worn, e.items)
 	end
 end
 
@@ -297,13 +328,30 @@ local function hurt(e: Enemy, dmg: number, info: any): boolean
 	if e.dead or e.dashT > 0 then
 		return false
 	end
+	-- Health.Hurt: AI-vs-AI x attacker.aiCombatFactor / victim.aiCombatFactor
+	local attacker = info and info.fromRef
+	if attacker and typeof(attacker) == "table" and attacker.def and not info.from then
+		dmg *= (attacker.def.aiCombat or 1) / (e.def.aiCombat or 1)
+	end
+	-- armorMultiplier: a crit hits the helmet, else the body armor: x 2 / (clamp(armor - AP, 0, 999) + 2)
+	local worn = if info and info.crit then e.helmet else e.armor
+	if worn and worn.dur > 0 and worn.value > 0 and not (info and info.direct) then
+		dmg *= 2 / (math.clamp(worn.value - ((info and info.pen) or 0), 0, 999) + 2)
+		worn.dur = math.max(0, worn.dur - ((info and info.armorBreak) or 0.55))
+	end
 	e.hp -= dmg
 	e.model:SetAttribute("HP", math.max(0, e.hp))
 	local src = info and (info.from or info.fromRef)
 	local at = src and posOf(src)
+	if info and info.stun then
+		e.stunUntil = clock + info.stun
+	end
 	e.lastHurt = clock
 	e.lastHurtDmg = dmg
 	e.lastHurtByChar = at ~= nil
+	if src then
+		e.lastAttacker = src
+	end
 	if at then
 		e.noticed = true
 		e.noticeT = clock
@@ -338,6 +386,11 @@ local function searchNow(r: SearchReq)
 	local hurtSearch = hurtWithin(e, 1, HURT_FRESH)
 	local dist = e.def.sight * r.mult * (if hurtSearch then 2 else 1)
 	local angle = e.def.sightAngle
+	if r.night then
+		-- patrol searches narrow at night: fov x lerp(NightViewAngleFactor, 1, nightVisionAbility)
+		local nf = Weather.tod[1]
+		angle *= nf + (1 - nf) * (e.def.nightVision or 0.5)
+	end
 	local best, bestD = nil, math.huge
 	for key, t in Weapons.targets do
 		if key == e or (t.kind ~= "player" and t.kind ~= "enemy") or not isEnemyTeam(e.team, t.team) then
@@ -514,7 +567,7 @@ local function startReload(e: Enemy)
 	if not row or e.ammo >= row.Capacity or e.dashT > 0 or e.reloadT > 0 or e.atk == "shoot" then
 		return
 	end
-	e.reloadT = row.ReloadTime
+	e.reloadT = math.max(1e-6, row.ReloadTime / (1 + (e.def.reloadGain or 0)))
 end
 
 local function reloadIfEmpty(e: Enemy, speak: boolean)
@@ -560,9 +613,9 @@ local function shootOnce(e: Enemy)
 	local m = 1
 	local t = targetOf(e.foe)
 	if t and t.kind == "player" then
-		m = if playerRunning(e.foe) then RUN_SCATTER else 1
+		m = if playerRunning(e.foe) then (e.def.runScatter or RUN_SCATTER) else 1
 		if not onScreen(e.pos) then
-			m = math.max(m, OFF_SCATTER)
+			m = math.max(m, e.def.offScreenScatter or OFF_SCATTER)
 		end
 	end
 	local cone = math.rad(e.gunScatter * math.max(0.1, e.def.scatterMul * (1 + m)))
@@ -573,8 +626,16 @@ local function shootOnce(e: Enemy)
 	local slope = (Config.Body.aimPlane - mz.Y) / flat
 	local critRate = (row.CritRate or 0) * (1 + (e.def.critGain or 0))
 	local yaws = {}
-	for _ = 1, n do
-		local yaw = base + (rng:NextNumber() - 0.5) * cone
+	-- a fanned gun (ShotAngle): pellets spread over the fan; a full ring loses one step and shifts half a step when even
+	local fan = row.ShotAngle or 0
+	local span, step0 = 0, 0
+	if n > 1 and fan > 0 then
+		span = if fan >= 360 then fan - fan / n else fan
+		step0 = span / (n - 1)
+	end
+	for i = 1, n do
+		local off = if n > 1 and fan > 0 then math.rad(-span / 2 + step0 * (i - 1) + (if fan >= 360 and n % 2 == 0 then step0 / 2 else 0)) else 0
+		local yaw = base + off + (rng:NextNumber() - 0.5) * cone
 		table.insert(yaws, yaw)
 		local crit = rng:NextNumber() < critRate
 		Weapons.spawn({
@@ -633,7 +694,7 @@ local function fireGun(e: Enemy, dt: number)
 		end
 		return
 	end
-	if e.dashT > 0 or e.ammo <= 0 then
+	if e.dashT > 0 or e.ammo <= 0 or e.useT > 0 or e.atk == "throw" then
 		return
 	end
 	local held = e.trigger and not e.running
@@ -658,6 +719,8 @@ local function meleeHit(e: Enemy)
 	if not m then
 		return
 	end
+	-- AI melee into half cover: x0.5
+	Cover.melee(e.pos.X, e.pos.Y, e.facing, m.range + 0.05, m.damage * e.def.dmgMul * 0.5)
 	for key, t in Weapons.targets do
 		if key == e or (t.kind ~= "player" and t.kind ~= "enemy") or not isEnemyTeam(e.team, t.team) then
 			continue
@@ -729,6 +792,191 @@ local function startDash(e: Enemy, dir: Vector2)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
+-- carried items (Roster.rollBody), item use (Enemy.startUse / finishUse), danger (hear type 2 -> fleeDanger)
+
+local SPAWN_COUNT = { bandage = 3 }
+local function rollItems(kind: string): { { id: string, n: number } }
+	local out = {}
+	local body = Items.bodies[kind]
+	if not body then
+		return out
+	end
+	local function pickPool(pool: { any }): string?
+		local total = 0
+		for _, r in pool do
+			total += r[2]
+		end
+		local roll = rng:NextNumber() * total
+		for _, r in pool do
+			roll -= r[2]
+			if roll <= 0 then
+				return r[1]
+			end
+		end
+		return nil
+	end
+	local function add(id: string)
+		if not Items.items[id] then
+			return
+		end
+		local n = SPAWN_COUNT[id] or 1
+		for _, st in out do
+			if st.id == id then
+				st.n += n
+				return
+			end
+		end
+		table.insert(out, { id = id, n = n })
+	end
+	for _, d in body.drops do
+		if d.weapon then
+			continue
+		end
+		local c = d.count or { 1, 1 }
+		local count = c[1] + math.floor(rng:NextNumber() * (c[2] - c[1] + 1))
+		if d.each then
+			for _ = 1, count do
+				if rng:NextNumber() < (d.chance or 1) then
+					local id = pickPool(d.pool or {})
+					if id then
+						add(id)
+					end
+				end
+			end
+		elseif rng:NextNumber() < (d.chance or 1) then
+			for _ = 1, count do
+				local id = pickPool(d.pool or {})
+				if id then
+					add(id)
+				end
+			end
+		end
+	end
+	return out
+end
+
+local function takeItem(e: Enemy, id: string)
+	for i, st in e.items do
+		if st.id == id then
+			st.n -= 1
+			if st.n <= 0 then
+				table.remove(e.items, i)
+			end
+			return
+		end
+	end
+end
+
+local function healItem(e: Enemy): string?
+	for _, st in e.items do
+		local it = Items.items[st.id]
+		if it and it.use and (it.use.heal or 0) > 0 then
+			return st.id
+		end
+	end
+	return nil
+end
+
+local function throwItem(e: Enemy): string?
+	for _, st in e.items do
+		if Grenades.row(st.id) and Items.items[st.id] and Items.items[st.id].kind == "throwable" then
+			return st.id
+		end
+	end
+	return nil
+end
+
+--- Enemy.startUse: the first carried heal; refused while reloading or dashing; `stand` stops moving (combat heal)
+local function startUse(e: Enemy, stand: boolean): boolean
+	local id = healItem(e)
+	if not id or e.reloadT > 0 or e.dashT > 0 or e.useT > 0 then
+		return false
+	end
+	e.useId = id
+	e.useT = Items.items[id].use.useTime or 1
+	e.useStand = stand
+	e.model:SetAttribute("UseId", id)
+	return true
+end
+
+local function tickUse(e: Enemy, dt: number)
+	if e.useT <= 0 then
+		return
+	end
+	if e.dashT > 0 then
+		e.useT = 0
+		e.useId = nil
+		e.model:SetAttribute("UseId", nil)
+		return
+	end
+	if e.useStand then
+		stopMove(e)
+	end
+	e.useT -= dt
+	if e.useT <= 0 then
+		local id = e.useId :: string
+		local heal = Items.items[id].use.heal or 0
+		e.hp = math.min(e.maxHp, e.hp + heal)
+		e.model:SetAttribute("HP", e.hp)
+		takeItem(e, id)
+		e.useId = nil
+		e.model:SetAttribute("UseId", nil)
+	end
+end
+
+--- calm heal (Patrol / Alert): every 1.5 s, unhurt (>= 2) for 5 s and at <= 80% hp -> use a heal while walking
+local function calmHeal(e: Enemy, dt: number)
+	e.healCheckT -= dt
+	if e.healCheckT > 0 then
+		return
+	end
+	e.healCheckT = 1.5
+	if not hurtWithin(e, 2, 5) and e.hp <= 0.8 * e.maxHp then
+		startUse(e, false)
+	end
+end
+
+function Enemies.setDanger(n: any)
+	for _, e in enemies do
+		if not e.dead then
+			e.danger = n
+		end
+	end
+end
+
+local function dangerNear(e: Enemy): Vector2?
+	local n = e.danger
+	if not n then
+		return nil
+	end
+	if not Grenades.alive(n) then
+		e.danger = nil
+		return nil
+	end
+	local p = Vector2.new(n.pos.X, n.pos.Z)
+	return if (p - e.pos).Magnitude <= 8 then p else nil
+end
+
+--- Enemy.fleeDanger: one move away from the grenade (8 s), "Danger!" at most every 5 s
+local function fleeDanger(e: Enemy, dt: number, at: Vector2, radius: number, avoid: number, angle: number, face: boolean)
+	if e.fleeT <= 0 then
+		moveTo(e, randomPoint(e, at, radius, avoid, angle), TASK_OVER)
+		e.fleeT = 8
+		if clock - e.dangerSaid >= 5 then
+			e.dangerSaid = clock
+			say(e, "Danger!")
+		end
+	end
+	e.fleeT -= dt
+	if face then
+		e.aimPos = at
+	end
+	if tickTask(e, dt) then
+		e.fleeT = 0
+	end
+end
+
+------------------------------------------------------------------------------------------------------------------------
 -- FSM
 
 local function enter(e: Enemy, state: string)
@@ -770,6 +1018,17 @@ local function enter(e: Enemy, state: string)
 end
 
 local function tickPatrol(e: Enemy, dt: number)
+	if e.def.patrolScare then
+		-- Patrol_Scare (the giant): stands still, never searches; a character hit (>= 2 within 0.25 s) makes it the foe
+		e.noticed = false
+		e.alert = false
+		stopMove(e)
+		if hurtWithin(e, 2, 0.25) and e.lastAttacker ~= nil then
+			e.foe = e.lastAttacker
+		end
+		return
+	end
+	calmHeal(e, dt)
 	e.searchT -= dt
 	if e.searchT <= 0 then
 		search(e, 1, true)
@@ -838,8 +1097,14 @@ local function tickAlert(e: Enemy, dt: number)
 	if e.searchT <= 0 then
 		search(e, SIGHT_ALERT, false)
 	end
+	calmHeal(e, dt)
 	if e.loopStep == -1 and e.waitT > 0 then
 		e.waitT -= dt
+		return
+	end
+	local dz = dangerNear(e)
+	if dz then
+		fleeDanger(e, dt, dz, 16, 10, 90, true)
 		return
 	end
 	local fresh = hurtWithin(e, 2, 0.1) or (e.noticed and clock - e.noticeT < NOTICE_FRESH)
@@ -907,6 +1172,11 @@ local function lostLogic(e: Enemy, fp: Vector2, dt: number, melee: boolean)
 end
 
 local function combatMove(e: Enemy, dt: number)
+	local dz = dangerNear(e)
+	if dz then
+		fleeDanger(e, dt, dz, 15, 9, 10, false)
+		return
+	end
 	-- hurt dodge (dash-capable kinds)
 	if e.def.dash and hurtWithin(e, 3, 0.2) and e.reloadT <= 0 and clock - e.dashTaskT >= e.dashNext then
 		stopMove(e)
@@ -971,9 +1241,59 @@ local function attackLoop(e: Enemy, dt: number, fp: Vector2)
 	local dist = (fp - e.pos).Magnitude
 	if e.atk == "gate" then
 		local go = not e.hasObstacle or hurtWithin(e, 3, 8)
-		if go and dist <= aimRange(e) * 1.5 then
-			e.atk = "range"
+		if not go then
+			-- combat heal: behind an obstacle, every 1.5 s at <= 30% hp with a drug
+			e.healCheckT -= dt
+			if e.healCheckT <= 0 then
+				e.healCheckT = 1.5
+				if e.useT <= 0 and e.hp <= 0.3 * e.maxHp and healItem(e) and not hurtWithin(e, 3, 8) then
+					e.atk = "healWait"
+					e.atkT = 0
+				end
+			end
+		elseif dist <= aimRange(e) * 1.5 then
+			-- the grenade check (6 s itemCooldown, 30%): a clear line, a carried throwable, nothing else running
+			local threw = false
+			if not e.hasObstacle and clock - e.skillCheckT >= 6 then
+				e.skillCheckT = clock
+				local tid = throwItem(e)
+				if tid and rng:NextNumber() <= 0.3 and e.reloadT <= 0 and e.useT <= 0 and e.swingT < 0 and e.dashT <= 0 then
+					e.throwId = tid
+					e.throwAt = fp
+					e.throwT = (Grenades.row(tid).readyTime or 0.25) + 0.1
+					e.atk = "throw"
+					e.atkT = 0
+					threw = true
+				end
+			end
+			if not threw then
+				e.atk = "range"
+				e.atkT = 0
+			end
+		end
+	elseif e.atk == "healWait" then
+		if e.atkT >= 0.5 then
+			startUse(e, true)
+			e.atk = "heal"
 			e.atkT = 0
+		end
+	elseif e.atk == "heal" then
+		if e.useT <= 0 then
+			e.atk = "gate"
+			e.atkT = 0
+		end
+	elseif e.atk == "throw" then
+		e.aimPos = e.throwAt
+		e.aimTarget = nil
+		e.throwT -= dt
+		if e.throwT <= 0 then
+			local tid = e.throwId :: string
+			local at = e.throwAt :: Vector2
+			takeItem(e, tid)
+			Grenades.launch(tid, e.pos.X, e.pos.Y, e.facing, at.X, at.Y, { team = e.team, fromRef = e, free = true })
+			e.atk = "gap"
+			e.atkT = 0
+			e.gapT = U(e.def.shootGap[1], e.def.shootGap[2])
 		end
 	elseif e.atk == "range" then
 		e.aimTarget = "foe"
@@ -1196,7 +1516,8 @@ local function integrate(e: Enemy, dt: number)
 	e.running = moving and e.runInput and (e.stamina / STAMINA_MAX >= 0.2 or (e.wasRunning and e.stamina > 0))
 	e.wasRunning = e.running
 	local held = if e.row and (e.row.MoveSpeedMultiplier or 0) > 0 then e.row.MoveSpeedMultiplier else 1
-	local speed = (if e.running then e.def.run else e.def.walk) * held
+	local mob = if e.stunUntil and clock < e.stunUntil then 0.15 else 1
+	local speed = (if e.running then e.def.run else e.def.walk) * held * mob
 	local vel = e.vel
 	if e.dashT > 0 then
 		e.dashT += dt
@@ -1232,7 +1553,7 @@ local function integrate(e: Enemy, dt: number)
 	end
 	if want and e.dashT <= 0 then
 		local d = angleDiff(want, e.facing)
-		local step = math.rad(e.turnStat) * dt
+		local step = math.rad(e.turnStat) * mob * dt
 		e.facing += math.clamp(d, -step, step)
 	end
 	-- drive the body
@@ -1343,6 +1664,23 @@ local function buildBody(def: any): (Model, BasePart, Humanoid?)
 	local tpl = assets and assets:FindFirstChild(def.rig)
 	if tpl and tpl:FindFirstChildOfClass("Humanoid") then
 		local m = (tpl :: Model):Clone()
+		if def.tint then
+			-- the stormling: the store body recoloured to the storm purple (no clothing), the hat in the light violet
+			for _, d in m:GetDescendants() do
+				if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") then
+					d:Destroy()
+				elseif d:IsA("BasePart") then
+					d.Color = if d.Parent and d.Parent:IsA("Accessory") then Color3.fromHex("#8a6aff") else def.tint
+					if d:IsA("MeshPart") then
+						d.TextureID = ""
+					end
+				elseif d:IsA("SpecialMesh") then
+					d.TextureId = ""
+				elseif d:IsA("SurfaceAppearance") then
+					d:Destroy()
+				end
+			end
+		end
 		Avatar.prepare(m, Avatar.HEIGHT * (def.scale or 1))
 		return m, m:FindFirstChild("HumanoidRootPart") :: BasePart, m:FindFirstChildOfClass("Humanoid")
 	end
@@ -1373,7 +1711,7 @@ local function buildBody(def: any): (Model, BasePart, Humanoid?)
 		local size0 = body:GetAttribute("Size0") :: Vector3
 		-- the wolf: 1.15 m nose to tail along its long axis
 		local long = math.max(size0.X, size0.Z)
-		body:ScaleTo(1.15 * S / long)
+		body:ScaleTo((def.bodyLen or 1.15) * S / long)
 		local mesh = body:FindFirstChildWhichIsA("BasePart", true) :: BasePart
 		body:PivotTo(root.CFrame * CFrame.new(0, -0.3 * S, 0) * (if size0.X > size0.Z then CFrame.Angles(0, math.pi / 2, 0) else CFrame.identity))
 		for _, p in body:GetDescendants() do
@@ -1514,9 +1852,57 @@ local function spawnEnemy(kind: string, x: number, z: number, group: { Enemy }?)
 		stepT = 0,
 		tracks = {},
 		anim = "",
+		lastAttacker = nil,
+		items = rollItems(def.kind),
+		useT = 0,
+		useId = nil,
+		useStand = false,
+		healCheckT = 1.5,
+		skillCheckT = -99,
+		throwT = 0,
+		throwId = nil,
+		throwAt = nil,
+		danger = nil,
+		fleeT = 0,
+		dangerSaid = -math.huge,
 	}
 	if e.row then
 		e.gunScatter = (Guns.scatterNow(e.row, 0))
+	end
+	-- the preset's armor / helmet quality roll picks the worn item (it drops with the body)
+	local function rollLevel(roll: { any }?): number
+		if not roll or rng:NextNumber() >= roll[1] then
+			return 0
+		end
+		local total = 0
+		for _, w in roll[2] do
+			total += w
+		end
+		local pick = rng:NextNumber() * total
+		for i, w in roll[2] do
+			pick -= w
+			if pick <= 0 then
+				return i
+			end
+		end
+		return #roll[2]
+	end
+	if def.fixedArmor then
+		e.armor = { id = "", value = def.fixedArmor, dur = 9999 }
+	end
+	if def.fixedHelmet then
+		e.helmet = { id = "", value = def.fixedHelmet, dur = 9999 }
+	end
+	local al, hl = rollLevel(def.armorRoll), rollLevel(def.helmetRoll)
+	if al > 0 then
+		local id = "armor_l" .. al
+		local g = Guns.items[id] and Guns.items[id].gear
+		e.armor = { id = id, value = g and g.armor or al, dur = g and g.dur or 50 }
+	end
+	if hl > 0 then
+		local id = if hl <= 3 then "helmet_l" .. hl else "helmat_lv4"
+		local g = Guns.items[id] and Guns.items[id].gear
+		e.helmet = { id = id, value = g and g.headArmor or hl, dur = g and g.dur or 40 }
 	end
 	enemies[e.id] = e
 	if group then
@@ -1542,6 +1928,9 @@ local function spawnEnemy(kind: string, x: number, z: number, group: { Enemy }?)
 		end,
 		ref = e,
 		model = model,
+		stun = function(secs)
+			e.stunUntil = clock + secs
+		end,
 	}
 	task.defer(loadTracks, e)
 	return e
@@ -1597,7 +1986,7 @@ local function update(e: Enemy, dt: number)
 	if e.turnT <= 0 then
 		e.turnT = 1
 		e.turnStat = if e.foe ~= nil then e.def.turnCombat else e.def.turnPatrol
-		e.reaction = e.def.reaction
+		e.reaction = e.def.reaction * (if Raid.isNight() then (e.def.nightReact or 1.5) else 1)
 	end
 	-- patrol anchor: the leader (members), self (leader), else the spawn
 	if e.foe == nil and e.leader and not e.leader.dead then
@@ -1643,6 +2032,7 @@ local function update(e: Enemy, dt: number)
 			tickGunCombat(e, dt)
 		end
 	end
+	tickUse(e, dt)
 	fireGun(e, dt)
 	tickMelee(e, dt)
 	integrate(e, dt)
@@ -1682,7 +2072,9 @@ local function playerSteps(dt: number)
 	end
 end
 
+local stepMs, stepMax, queueMax = 0, 0, 0
 local function step(dt: number)
+	local t0 = os.clock()
 	clock += dt
 	updateGroups()
 	-- last frame's finished paths
@@ -1722,71 +2114,122 @@ local function step(dt: number)
 	playerSteps(dt)
 	runBrain()
 	runPaths()
+	local ms = (os.clock() - t0) * 1000
+	stepMs = stepMs * 0.95 + ms * 0.05
+	stepMax = math.max(stepMax * 0.995, ms)
+	queueMax = math.max(queueMax, #pathQ)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
 -- spawners: count [min, max] at random points, the kind mix, the spawn delay, minDist from every player; boss groups
 -- pick one option. Each spawner batch is one AI group (the first spawned leads).
 
-local PORTED = { scrapper = true, scav = true, brute = true, scrapper_rifle = true, contractor = true, boss = true, wolf = true }
-local function rollSpawners()
-	local n, skipped = 0, {}
-	local groupPick: { [string]: number } = {}
-	for _, sp in MapData.spawners or {} do
-		if sp.group then
-			if groupPick[sp.group] == nil then
-				groupPick[sp.group] = math.random(0, 2)
-			end
-			if sp.option ~= groupPick[sp.group] then
+local PORTED = { scrapper = true, scav = true, brute = true, scrapper_rifle = true, contractor = true, boss = true, wolf = true,
+	giant = true, operator = true, bloater = true, stormling = true, drone = true }
+local spawnedCount = 0
+local deferred: { [string]: { any } } = {}
+
+--- World.runSpawners for one root: roll prob, then count, then distinct random points between minDist and maxDist of
+--- every player, 0.1 s apart; the batch is one AI group (the first spawned leads)
+local function runSpawner(sp: any, delay: number)
+	local kind = sp.type or "scrapper"
+	if (sp.prob or 1) < math.random() then
+		return
+	end
+	local lo, hi = sp.count and sp.count[1] or 1, sp.count and sp.count[2] or 1
+	local count = math.random(lo, hi)
+	task.delay(delay, function()
+		local pts = table.clone(sp.points or {})
+		local group: { Enemy }? = if count > 1 then {} else nil
+		local placed = 0
+		while placed < count and #pts > 0 do
+			local pt = table.remove(pts, math.random(1, #pts))
+			local d = nearestPlayer(Vector2.new(pt.x, pt.z))
+			if d < (sp.minDist or 0) or d > (sp.maxDist or 9999) then
 				continue
 			end
+			local k = kind
+			if sp.kinds then
+				local r, acc = math.random(), 0
+				for _, kw in sp.kinds do
+					acc += kw[2]
+					if r <= acc then
+						k = kw[1]
+						break
+					end
+				end
+			end
+			if k == "scrapper_rifle" then
+				local e = spawnEnemy("scrapper", pt.x, pt.z, group)
+				e.gun = "ak74u"
+				e.row = Guns.row("ak74u")
+				e.gunScatter = (Guns.scatterNow(e.row, 0))
+				e.model:SetAttribute("Gun", "ak74u")
+			elseif PORTED[k] then
+				spawnEnemy(k, pt.x, pt.z, group)
+			end
+			placed += 1
+			spawnedCount += 1
+			task.wait(sp.interval or 0.1)
+		end
+	end)
+end
+
+--- night / rain / storm roots run once, the first frame their condition holds (World.ts conditionSpawned)
+function Enemies.onCondition(name: string)
+	local list = deferred[name]
+	if not list then
+		return
+	end
+	deferred[name] = nil
+	for _, sp in list do
+		runSpawner(sp, if name == "night" then 0 else (sp.delay or 0))
+	end
+	print(string.format("[Blockov] %s spawners: %d roots", name, #list))
+end
+
+local function rollSpawners()
+	local skipped = {}
+	-- selector groups: pick [min, max] distinct options of the group
+	local options: { [string]: { number } } = {}
+	local pickOf: { [string]: { number } } = {}
+	for _, sp in MapData.spawners or {} do
+		if sp.group then
+			options[sp.group] = options[sp.group] or {}
+			if not table.find(options[sp.group], sp.option or 0) then
+				table.insert(options[sp.group], sp.option or 0)
+			end
+			pickOf[sp.group] = sp.pick or { 1, 1 }
+		end
+	end
+	local chosen: { [string]: { [number]: boolean } } = {}
+	for g, opts in options do
+		local pk = pickOf[g]
+		local n = math.random(pk[1], pk[2])
+		local pool = table.clone(opts)
+		chosen[g] = {}
+		for _ = 1, math.min(n, #pool) do
+			chosen[g][table.remove(pool, math.random(1, #pool))] = true
+		end
+	end
+	for _, sp in MapData.spawners or {} do
+		if sp.group and not chosen[sp.group][sp.option or 0] then
+			continue
 		end
 		local kind = sp.type or "scrapper"
 		if not PORTED[kind] then
 			skipped[kind] = (skipped[kind] or 0) + 1
 			continue
 		end
-		if (sp.prob or 1) < math.random() then
+		if sp.when then
+			deferred[sp.when] = deferred[sp.when] or {}
+			table.insert(deferred[sp.when], sp)
 			continue
 		end
-		local lo, hi = sp.count and sp.count[1] or 1, sp.count and sp.count[2] or 1
-		local count = math.random(lo, hi)
-		task.delay(sp.delay or 0, function()
-			local pts = table.clone(sp.points or {})
-			local group: { Enemy }? = if count > 1 then {} else nil
-			local placed = 0
-			while placed < count and #pts > 0 do
-				local pt = table.remove(pts, math.random(1, #pts))
-				if nearestPlayer(Vector2.new(pt.x, pt.z)) < (sp.minDist or 0) then
-					continue
-				end
-				local k = kind
-				if sp.kinds then
-					local r, acc = math.random(), 0
-					for _, kw in sp.kinds do
-						acc += kw[2]
-						if r <= acc then
-							k = kw[1]
-							break
-						end
-					end
-				end
-				if k == "scrapper_rifle" then
-					local e = spawnEnemy("scrapper", pt.x, pt.z, group)
-					e.gun = "ak74u"
-					e.row = Guns.row("ak74u")
-					e.gunScatter = (Guns.scatterNow(e.row, 0))
-					e.model:SetAttribute("Gun", "ak74u")
-				elseif PORTED[k] then
-					spawnEnemy(k, pt.x, pt.z, group)
-				end
-				placed += 1
-				n += 1
-			end
-		end)
+		runSpawner(sp, sp.delay or 0)
 	end
 	task.delay(4, function()
-		print(string.format("[Blockov] spawned %d enemies at start (navmesh %d tris, %d ms); unported spawners: %s", n, Nav.triangles, math.floor(Nav.buildMs), game:GetService("HttpService"):JSONEncode(skipped)))
+		print(string.format("[Blockov] spawned %d enemies at start (navmesh %d tris, %d ms); unported spawners: %s", spawnedCount, Nav.triangles, math.floor(Nav.buildMs), game:GetService("HttpService"):JSONEncode(skipped)))
 	end)
 end
 
@@ -1828,7 +2271,8 @@ function Enemies.start()
 				if typeof(v) == "string" and pp then
 					local kind, dx, dz = string.match(v, "^(%w+),([%-%d%.]+),([%-%d%.]+)")
 					if kind then
-						spawnEnemy(kind, pp.X + tonumber(dx) :: number, pp.Z + tonumber(dz) :: number, nil)
+						local sx, sz = Nav.snap(pp.X + tonumber(dx) :: number, pp.Z + tonumber(dz) :: number)
+						spawnEnemy(kind, sx, sz, nil)
 					end
 				end
 			end)
@@ -1864,7 +2308,7 @@ function Enemies.start()
 					end
 					last[e] = e.pos
 				end
-				table.insert(rows, string.format("active=%d moving=%d stuck=%d", nActive, nMoving, nStuck))
+				table.insert(rows, string.format("active=%d moving=%d stuck=%d stepMs=%.2f max=%.1f pathQ=%d qmax=%d", nActive, nMoving, nStuck, stepMs, stepMax, #pathQ, queueMax))
 				for _, e in enemies do
 					local d = nearestPlayer(e.pos)
 					if d < 60 then

@@ -168,6 +168,22 @@ export type EnemyDef = {
 	turnCombat: number,
 	mv: number?,
 	critGain: number?,
+	patrolScare: boolean?,
+	ring: boolean?,
+	canTalk: boolean?,
+	tint: Color3?,
+	fixedArmor: number?,
+	fixedHelmet: number?,
+	bodyLen: number?,
+	boss: boolean?,
+	aiCombat: number?,
+	armorRoll: { any }?,
+	helmetRoll: { any }?,
+	runScatter: number?,
+	offScreenScatter: number?,
+	reloadGain: number?,
+	nightReact: number?,
+	nightVision: number?,
 	traceChance: { number }?,
 	dash: { number }?,
 	shootCanMove: boolean?,
@@ -191,25 +207,50 @@ local function def(t: any): EnemyDef
 	t.traceChance = t.traceChance or (if t.melee then { 1, 1 } else { 0.3, 0.7 })
 	return t
 end
-Config.Enemies.scrapper = def({ kind = "scrapper", name = "Scav Grunt", rig = "NPC_scrapper", critGain = -0.3, hp = 35, dmgMul = 0.82, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
+Config.Enemies.scrapper = def({ kind = "scrapper", name = "Scav Grunt", rig = "NPC_scrapper", critGain = -0.3, scale = 0.88, aiCombat = 1, hp = 35, dmgMul = 0.82, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
 	shootTime = { 0.2, 0.5 }, shootGap = { 1.0, 1.5 }, scatterMul = 0.65, bulletSpeedMul = 0.65, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 },
 	weapons = { { "toz66", 15 }, { "tt33", 25 }, { "pm", 25 } }, team = 1 })
-Config.Enemies.scav = def({ kind = "scav", name = "Scav", rig = "NPC_scav", hp = 45, dmgMul = 0.9, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
+Config.Enemies.scav = def({ kind = "scav", name = "Scav", rig = "NPC_scav", scale = 0.92, aiCombat = 1, armorRoll = { 0.5, { 250, 50, 5, 0 } }, helmetRoll = { 0.3, { 150, 40, 15, 0 } }, hp = 45, dmgMul = 0.9, sight = 15, sightAngle = 100, reaction = 0.65, shootDelay = 0.35,
 	shootTime = { 0.2, 0.5 }, shootGap = { 1.1, 1.8 }, scatterMul = 0.65, bulletSpeedMul = 0.75, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 },
 	weapons = { { "shotgun_homemade", 10 }, { "mp155", 10 }, { "g17", 10 }, { "bow", 3 }, { "ak47", 5 }, { "ak103", 1 }, { "ak74u", 8 }, { "adar", 4 } }, team = 1 })
-Config.Enemies.brute = def({ kind = "brute", name = "Brute", rig = "NPC_brute", scale = 1.1, hp = 60, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 1.0, shootDelay = 0.2, mv = 1.15,
+Config.Enemies.brute = def({ kind = "brute", name = "Brute", rig = "NPC_brute", scale = 1.0, aiCombat = 1, hp = 60, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 1.0, shootDelay = 0.2, mv = 1.15,
 	shootTime = { 0.3, 0.75 }, shootGap = { 0.5, 1.5 }, scatterMul = 0.35, bulletSpeedMul = 0.75, forget = 8, patrolRange = 8, combatMoveRange = 3.5, combatMoveTime = { 1, 3 },
 	weapons = {}, melee = { damage = 27, range = 1.55, interval = 1 / 2.2, bleed = 0.5, critRate = 0.2, critMul = 1.6 }, team = 1 })
-Config.Enemies.contractor = def({ kind = "contractor", name = "Contractor", rig = "NPC_contractor", hp = 60, dmgMul = 1, sight = 16, sightAngle = 100, reaction = 0.55, shootDelay = 0.25,
+Config.Enemies.contractor = def({ kind = "contractor", name = "Contractor", rig = "NPC_contractor", scale = 0.95, aiCombat = 1.5, traceChance = { 0.1, 0.8 }, armorRoll = { 1, { 10, 300, 50, 4 } }, helmetRoll = { 0.3, { 0, 200, 50, 4 } }, hp = 60, dmgMul = 1, sight = 16, sightAngle = 100, reaction = 0.55, shootDelay = 0.25,
 	shootTime = { 0.4, 0.8 }, shootGap = { 0.8, 2.2 }, scatterMul = 0.5, bulletSpeedMul = 1, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
 	weapons = { { "m4a1", 10 }, { "mp7", 8 }, { "ump45", 8 }, { "mp155", 8 }, { "mp5", 10 }, { "vector", 8 } }, team = 3 })
-Config.Enemies.boss = def({ kind = "boss", name = "Warlord", rig = "NPC_boss", scale = 1.2, hp = 160, dmgMul = 1, sight = 17, sightAngle = 140, reaction = 0.45, shootDelay = 0.15,
+Config.Enemies.boss = def({ kind = "boss", name = "Warlord", rig = "NPC_boss", scale = 1.2, aiCombat = 2, traceChance = { 0.5, 0.5 }, runScatter = 2, offScreenScatter = 2, rangeMul = 1.25, reloadGain = 1, dash = { 4, 7 }, armorRoll = { 1, { 0, 0, 1, 0 } }, hp = 160, dmgMul = 1, sight = 17, sightAngle = 140, reaction = 0.45, shootDelay = 0.15,
 	shootTime = { 1, 2 }, shootGap = { 1.3, 2.3 }, scatterMul = 0.4, bulletSpeedMul = 0.9, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
 	weapons = { { "ak47", 1 } }, hitRadius = 0.7, team = 3, exp = 100 })
-Config.Enemies.wolf = def({ kind = "wolf", name = "Wolf", rig = "NPC_wolf", hp = 40, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 0.2, shootDelay = 0.2, mv = 1.3,
+Config.Enemies.wolf = def({ kind = "wolf", name = "Wolf", rig = "NPC_wolf", aiCombat = 1.2, hp = 40, dmgMul = 1, sight = 15, sightAngle = 100, reaction = 0.2, shootDelay = 0.2, mv = 1.3,
 	shootTime = { 0.2, 0.2 }, shootGap = { 0, 0 }, scatterMul = 0.35, bulletSpeedMul = 1, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
 	weapons = {}, melee = { damage = 25, range = 2, interval = 1 / 1.3, bleed = 0.5, critRate = 0.15, critMul = 1.15 }, hitRadius = 0.65, team = 8,
 	dash = { 1, 1.2 }, shootCanMove = true })
+
+-- EnemyPreset_Melee_UltraMan (gz_presets 76513): team 7 boss, battle axe, Patrol_Scare (stands until hurt for 2 in 0.25 s)
+Config.Enemies.giant = def({ kind = "giant", name = "Giant", rig = "NPC_giant", hp = 400, dmgMul = 1, sight = 13, sightAngle = 100, reaction = 0.2, shootDelay = 0.2, mv = 1.3,
+	shootTime = { 0.2, 0.2 }, shootGap = { 0.2, 0.2 }, scatterMul = 0.35, bulletSpeedMul = 1, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 600,
+	weapons = {}, melee = { damage = 40, range = 1.5, interval = 0.83, bleed = 0.35, critRate = 0.2, critMul = 1.4, weapon = "battle_axe" }, hitRadius = 0.7, team = 7, aiCombat = 2,
+	scale = 1.3, patrolScare = true, exp = 100, boss = true })
+-- EnemyPreset_USEC_HiddenWareHouse: team 3, grenades 30% x1-2, armor always (armor_l2 .80 ...), helmet 30%
+Config.Enemies.operator = def({ kind = "operator", name = "Operator", rig = "NPC_operator", hp = 60, dmgMul = 1, sight = 16, sightAngle = 100, reaction = 0.45, shootDelay = 0.25,
+	shootTime = { 0.25, 0.55 }, shootGap = { 0.8, 2.2 }, scatterMul = 0.6, runScatter = 3, offScreenScatter = 3, bulletSpeedMul = 0.8, rangeMul = 1.3, forget = 8, patrolRange = 25,
+	combatMoveRange = 8, combatMoveTime = { 1, 3 }, turnPatrol = 500, traceChance = { 0.1, 0.8 }, shootCanMove = true, aiCombat = 1.5, scale = 0.95,
+	weapons = { { "mp7", 0.2759 }, { "m4a1", 0.1724 }, { "aug_a1", 0.1724 }, { "mp155", 0.1379 }, { "ump45", 0.1379 }, { "vector", 0.069 }, { "mdr556", 0.0345 } },
+	armorRoll = { 1, { 0, 80, 15, 4 } }, helmetRoll = { 0.3, { 0, 200, 50, 4 } }, team = 3, exp = 150 })
+-- EnemyPreset_Mushroom: the 8-pellet ring gun (15 per pellet: 10 x 12 / 8), rain spawns
+Config.Enemies.bloater = def({ kind = "bloater", name = "Bloater", rig = "NPC_bloater", hp = 80, dmgMul = 12, sight = 19, sightAngle = 100, reaction = 0.4, shootDelay = 0.2,
+	shootTime = { 0.2, 0.5 }, shootGap = { 1.0, 1.5 }, scatterMul = 0.65, bulletSpeedMul = 0.75, rangeMul = 1.2, forget = 10, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 },
+	traceChance = { 0.25, 0.25 }, turnPatrol = 1000, aiCombat = 1.5, weapons = { { "egun_ring", 1 } }, ring = true, canTalk = false, team = 8, exp = 100, bodyLen = 1.3 })
+-- EnemyPreset_StormCreature: storm spawns, canDash 2-4 s, never strafes (combatMoveTime 0)
+Config.Enemies.stormling = def({ kind = "stormling", name = "Stormling", rig = "NPC_scav", hp = 150, dmgMul = 1.1, sight = 18, sightAngle = 100, reaction = 0.1, nightReact = 1, nightVision = 1,
+	shootDelay = 0.25, mv = 1.6, shootTime = { 0.4, 1.0 }, shootGap = { 1.1, 1.8 }, scatterMul = 0.35, bulletSpeedMul = 1.25, forget = 8, patrolRange = 8, combatMoveRange = 8,
+	combatMoveTime = { 0, 0 }, traceChance = { 1, 1 }, turnPatrol = 500, aiCombat = 1.5, weapons = { { "egun_storm", 1 } }, dash = { 2, 4 }, canTalk = false, team = 8, exp = 100,
+	scale = 1.05, tint = Color3.fromHex("#6a4a8a") })
+-- EnemyPreset_Spider_Rifle: night spawns, armor 4 / 4, hackable (not ported)
+Config.Enemies.drone = def({ kind = "drone", name = "Spider Drone", rig = "NPC_drone", hp = 75, dmgMul = 1.2, sight = 17, sightAngle = 100, reaction = 0.3, nightReact = 1, shootDelay = 0.2,
+	shootTime = { 0.5, 1.0 }, shootGap = { 2.0, 3.0 }, scatterMul = 0.35, offScreenScatter = 3, bulletSpeedMul = 1, forget = 8, patrolRange = 8, combatMoveRange = 8, combatMoveTime = { 1, 3 },
+	traceChance = { 1, 1 }, turnPatrol = 300, shootCanMove = true, aiCombat = 1.5, weapons = { { "egun_spider", 1 } }, fixedArmor = 4, fixedHelmet = 4, team = 6, exp = 250, bodyLen = 1.1 })
 
 -- Enemy AI limits (Enemy.ts AI const)
 Config.AI = { trackRange = 20, meleeTrackRange = 24, activeDistance = 50, alertSightMul = 1.25, reacquireSightMul = 1.5, lostWait = 0.25 }

@@ -177,7 +177,7 @@ local function build()
 	new("UIStroke", { Thickness = 3, Color = Color3.fromHex("#DE31FF"), Transparency = 0.4 }, storm)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 15), PaddingRight = UDim.new(0, 20) }, storm)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) }, storm)
-	text(storm, "Next Storm Arrives In:", 25)
+	R.stormLabel = text(storm, "Next Storm Arrives In:", 25)
 	R.stormTime = text(storm, "216:00", 30, { TextColor3 = Color3.fromHex("#fdc6ff"), FontFace = DIGITS })
 
 	-- controls hint (SimpleIndicators: right 25, top 100) + the panel toggled with O
@@ -657,14 +657,22 @@ function Hud.update(dt: number)
 	R.marker.Visible = alive
 	R.statuses.Visible = alive
 
-	-- clock (40x from 08:00) and the storm countdown (9 days asleep)
-	local secs = player:GetAttribute("RaidClock")
-	if typeof(secs) == "number" then
-		local h = (Config.Clock.start + secs * Config.Clock.scale / 3600) % 24
-		R.clockTime.Text = string.format("%02d:%02d", math.floor(h), math.floor((h % 1) * 60))
+	-- clock, phase, weather and the storm countdown (Game.clockInfo: H:MM of STORM_START - cyc, hours uncapped;
+	-- during a storm "Storm Phase I / II Ends In:" STORM_CYCLE - cyc)
+	local cm = workspace:GetAttribute("ClockMin")
+	if typeof(cm) == "number" then
+		local h = (cm / 60) % 24
+		R.clockTime.Text = string.format("%02d:%02d", math.floor(h), math.floor(cm % 60))
 		R.clockPhase.Text = if h >= 22 or h < 6 then "Night" elseif h >= 18 then "Dusk" else "Day"
-		local left = 9 * 24 - secs * Config.Clock.scale / 3600
-		R.stormTime.Text = string.format("%03d:%02d", math.floor(left), math.floor((left % 1) * 60))
+		local w = workspace:GetAttribute("Weather")
+		R.clockWeather.Text = if typeof(w) == "string" then w else "Sunny"
+		local START, CYCLE = 9 * 1440, 9 * 1440 + 1440
+		local cyc = cm % CYCLE
+		local storm = cyc >= START
+		local phase = workspace:GetAttribute("StormPhase")
+		R.stormLabel.Text = if storm then (if phase == 2 then "Storm Phase II Ends In:" else "Storm Phase I Ends In:") else "Next Storm Arrives In:"
+		local left = if storm then CYCLE - cyc else START - cyc
+		R.stormTime.Text = string.format("%d:%02d", math.floor(left / 60), math.floor(left % 60))
 	end
 
 	-- HP: fill, white lag held 0.35 s then draining 1.5/s, pill flash 1.06 -> 1 over 0.25 s; hurt vignette on >= 1.5
@@ -758,7 +766,7 @@ function Hud.update(dt: number)
 	local counts = {}
 	for _, st in bagStacks() do
 		local def = Guns.items[st.id]
-		if def and def.use then
+		if def and (def.use or def.kind == "throwable") then
 			table.insert(hotbar, st.id)
 			counts[#hotbar] = st.n
 		end
@@ -773,8 +781,10 @@ function Hud.update(dt: number)
 		hs.frame.BackgroundTransparency = if def then 0.8 else 0.251
 		hs.ct.Visible = def ~= nil
 		hs.cts.Text = if def then tostring(counts[k]) else ""
-		if def and usingId == id then
-			hs.ringIn.Color = Color3.fromHex("#ff9e3a")
+		local throwSel = def ~= nil and PC.held == "throw" and require(script.Parent.Throw).id == id
+		if def and (usingId == id or throwSel) then
+			-- the item in use, or the selected throwable (.sel)
+			hs.ringIn.Color = if throwSel then WHITE else Color3.fromHex("#ff9e3a")
 			hs.ringIn.Thickness = 3
 			hs.ringIn.Transparency = 0
 		else
@@ -992,6 +1002,10 @@ function Hud.update(dt: number)
 		elseif load <= 0.25 then
 			table.insert(list, { name = "Agile" })
 		end
+	end
+	if player:GetAttribute("Distortion") then
+		local layers = player:GetAttribute("StormLayers")
+		table.insert(list, { name = "Distortion", sub = if typeof(layers) == "number" then "x" .. layers else nil })
 	end
 	local water, energy = player:GetAttribute("Water"), player:GetAttribute("Energy")
 	if typeof(water) == "number" then

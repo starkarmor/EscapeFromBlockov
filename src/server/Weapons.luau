@@ -13,6 +13,7 @@ local Guns = require(Shared.Guns)
 local Net = require(Shared.Net)
 local Units = require(Shared.Units)
 local Config = require(Shared.Config)
+local Cover = require(script.Parent.Cover)
 
 local S = Units.S
 local Weapons = {}
@@ -26,6 +27,7 @@ export type Target = {
 	hurt: (dmg: number, info: any) -> boolean, -- returns true on a kill
 	ref: any,
 	model: Model?,
+	stun: ((number) -> ())?,
 }
 -- registered by Raid (players) and Enemies
 Weapons.targets = {} :: { [any]: Target }
@@ -294,6 +296,13 @@ local function step(dt: number)
 			table.remove(bullets, i)
 		elseif wall then
 			local at = wall.Position / S
+			-- half cover takes the bullet's damage (x falloff; enemy bullets x0.5)
+			local cid = Cover.of(wall.Instance)
+			if cid then
+				local travelled = b.travelled + (at - a).Magnitude
+				local dmg = b.damage * (if travelled > b.half then b.dmgOver else 1)
+				Cover.damage(cid, dmg * (if b.team ~= 0 then 0.5 else 1))
+			end
 			for _, pl in Players:GetPlayers() do
 				if pl ~= b.from then
 					Net.event("Fx"):FireClient(pl, "impact", at, wall.Normal)

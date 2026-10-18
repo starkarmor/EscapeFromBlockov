@@ -87,10 +87,18 @@ local function loadProfile(p: Player): Profile
 			end
 		end
 	end
+	-- the game clock (minutes, 08:00 day 0) and the weather seed persist per save (Profile.ts clock, weatherSeed)
+	local x = prof :: any
+	x.clock = x.clock or 8 * 60
+	x.weatherSeed = x.weatherSeed or math.random(0, 99999)
 	return prof
 end
 
 local function saveProfile(p: Player)
+	local prof0 = profiles[p]
+	if prof0 then
+		(prof0 :: any).clock = require(script.Parent.Weather).clock
+	end
 	local prof = profiles[p]
 	if not prof or not store or p.UserId <= 0 then
 		return
@@ -234,6 +242,7 @@ function Raid.deploy(p: Player)
 		return
 	end
 	local gun, bag = starterKit()
+	require(script.Parent.Weather).begin((prof :: any).clock, (prof :: any).weatherSeed)
 	local r: RaidState = {
 		hp = Config.Body.maxHp,
 		maxHp = Config.Body.maxHp,
@@ -302,6 +311,9 @@ function Raid.deploy(p: Player)
 		hurt = function(dmg, info)
 			return Raid.hurt(p, dmg, info)
 		end,
+		stun = function(secs)
+			Raid.stun(p, secs)
+		end,
 		ref = p,
 		model = model,
 	}
@@ -310,6 +322,26 @@ function Raid.deploy(p: Player)
 	Weapons.syncAmmo(p)
 	Raid.sendBag(p)
 	Net.event("RaidState"):FireClient(p, "deployed")
+end
+
+--- StormWeather protection: the worn gear's storm points (helmet_storm, gasmask: 1 each)
+function Raid.stormProtection(p: Player): number
+	local r = raids[p] :: any
+	if not r then
+		return 0
+	end
+	local n = 0
+	for _, k in { "helmet", "armor", "face" } do
+		local g = r[k]
+		if g and (g.id == "helmet_storm" or g.id == "gasmask") then
+			n += 1
+		end
+	end
+	return n
+end
+
+function Raid.stun(p: Player, secs: number)
+	p:SetAttribute("StunUntil", Workspace:GetServerTimeNow() + secs)
 end
 
 function Raid.hurt(p: Player, dmg: number, info: any): boolean
@@ -324,6 +356,10 @@ function Raid.hurt(p: Player, dmg: number, info: any): boolean
 	-- dodge roll: fully invulnerable (Player.ts dashing)
 	if os.clock() - r.dodgeAt < Config.Dash.time and not (info and info.direct) then
 		return false
+	end
+	-- Stun (buff 1041 / 1042): Moveability -0.85 for its time
+	if info and info.stun then
+		Raid.stun(p, info.stun)
 	end
 	-- KillInfo for the result screen's "I was killed by" (Killer.ts): name, weapon, headshot, explosion
 	if info then
@@ -533,6 +569,16 @@ function Raid.addBleed(p: Player)
 	end
 	r.bleed = math.min(3, (r.bleed or 0) + 1)
 	r.bleedLeft = 25
+end
+
+--- the world's hour of day (server/Weather.luau clock)
+function Raid.hour(): number
+	return require(script.Parent.Weather).hour()
+end
+
+--- TimeOfDayController: night 22:00-06:00
+function Raid.isNight(): boolean
+	return require(script.Parent.Weather).night
 end
 
 -- extraction pad + clock + vitals drain each frame

@@ -133,6 +133,11 @@ function PC.update(dt: number, cursor: Vector2)
 		pct += Wt.starveSpeed
 	end
 	PC.moveability = if typeof(water) == "number" and water <= 0 then math.max(0, 1 + Wt.thirstMoveability) else 1
+	-- Stun (flashbang / bear trap): Moveability -0.85
+	local stunUntil = plr:GetAttribute("StunUntil")
+	if typeof(stunUntil) == "number" and Workspace:GetServerTimeNow() < stunUntil then
+		PC.moveability = math.max(0, PC.moveability - 0.85)
+	end
 	local mob = PC.moveability
 	local walkEff = M.walk * math.max(0, 1 + pct) * mob * held
 	local runEff = M.run * math.max(0, 1 + pct) * mob * held

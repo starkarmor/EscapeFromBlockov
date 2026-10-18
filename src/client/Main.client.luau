@@ -19,6 +19,7 @@ local Vision = require(script.Parent.Vision)
 local DayNight = require(script.Parent.DayNight)
 local Sfx = require(script.Parent.Sfx)
 local Inventory = require(script.Parent.Inventory)
+local Throw = require(script.Parent.Throw)
 local stepT = 0
 
 local player = Players.LocalPlayer
@@ -77,7 +78,16 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	elseif SLOT_KEYS[input.KeyCode] then
 		local id = Hud.hotbarItem(SLOT_KEYS[input.KeyCode])
 		if id then
-			Net.event("UseItem"):FireServer(id)
+			-- a throwable becomes the held item (World: switchTo('throw', id)); "No X left" when the stack is gone
+			local it = require(Shared.gen.Items).items[id]
+			if it and it.kind == "throwable" then
+				if Throw.select(id) then
+					PC.slot = SLOT_KEYS[input.KeyCode] + 3
+					Net.event("SelectSlot"):FireServer("throw")
+				end
+			else
+				Net.event("UseItem"):FireServer(id)
+			end
 		end
 	end
 end)
@@ -90,7 +100,7 @@ RunService:BindToRenderStep("Blockov3C", Enum.RenderPriority.Camera.Value + 1, f
 	if not root then
 		Vision.fan(false)
 		Vision.update()
-		DayNight.update()
+		DayNight.update(dt)
 		Hud.update(dt)
 		return
 	end
@@ -114,7 +124,7 @@ RunService:BindToRenderStep("Blockov3C", Enum.RenderPriority.Camera.Value + 1, f
 	Interact.update(dt)
 	Vision.update()
 	Vision.fan(true)
-	DayNight.update()
+	DayNight.update(dt)
 	-- footsteps: the walk cycle bands (gz_holdpose thresholds 0.5 / 1 / 2 m/s -> 1.25 / 0.714 / 0.476 s per cycle, 2 steps)
 	local sp = PC.vel.Magnitude
 	if sp > 0.5 and not PC.dashing() then

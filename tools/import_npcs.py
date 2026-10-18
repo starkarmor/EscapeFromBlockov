@@ -9,6 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp import Studio
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 spec = json.load(open(os.path.join(ROOT, 'docs/creator-assets.json')))['npcs']
+only = sys.argv[1:]
+if only: spec = {k: v for k, v in spec.items() if k in only}
 s = Studio()
 if 'Play' in s.call('get_studio_state')[0]:
     s.call('start_stop_play', is_start=False)
@@ -41,6 +43,8 @@ else
 	-- a static creature model: one Model of anchored-free parts, pivoted at the bottom centre
 	rig = Instance.new("Model")
 	for _, c in raw:GetChildren() do c.Parent = rig end
+	-- a rigged store model used as a static creature: no Humanoid (our ball root carries it)
+	for _, d in rig:GetDescendants() do if d:IsA("Humanoid") or d:IsA("BillboardGui") then d:Destroy() end end
 	for _, d in rig:GetDescendants() do if d:IsA("BasePart") then d.Anchored = false d.CanCollide = false d.CanQuery = false d.Massless = true end end
 	local cf, size = rig:GetBoundingBox()
 	rig.WorldPivot = cf * CFrame.new(0, -size.Y / 2, 0)

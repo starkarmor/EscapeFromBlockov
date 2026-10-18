@@ -164,14 +164,22 @@ local function setVisible(m: Model, on: boolean)
 	end
 end
 
-local function night(): boolean
-	local secs = player:GetAttribute("RaidClock")
-	if typeof(secs) ~= "number" then
-		return false
-	end
-	local h = (Config.Clock.start + secs * Config.Clock.scale / 3600) % 24
-	return h >= 22 or h < 6
+-- the fog-of-war cone (World.ts 3486-3515): TimeOfDayPost factors from the world (8 s blend on the server):
+-- angle 100 x f.angle, bubble 1.5 x f.sense, distance max(37 x f.dist, bubble - 2.5); ADS draws the range x1.15
+local function viewNow(): (number, number, number)
+	local V = Config.View
+	local fa = Workspace:GetAttribute("TodAngle")
+	local fd = Workspace:GetAttribute("TodDist")
+	local fs = Workspace:GetAttribute("TodSense")
+	local a = V.angle * (if typeof(fa) == "number" then fa else 1)
+	local bubble = V.bubble * (if typeof(fs) == "number" then fs else 1)
+	local dist = math.max(V.dist * (if typeof(fd) == "number" then fd else 1), bubble - 2.5)
+	return a, dist, bubble
 end
+local function night(): boolean
+	return Workspace:GetAttribute("Night") == true
+end
+local _ = night
 
 local lastT = os.clock()
 function Vision.update()
@@ -204,10 +212,8 @@ function Vision.update()
 	local me = player.Character
 	params.FilterDescendantsInstances = { folder }
 	local V = Config.View
-	local nm = if night() then V.nightMul else { 1, 1, 1 }
-	local half = math.rad(V.angle * nm[1] / 2)
-	local dist = V.dist * nm[2]
-	local bubble = V.bubble * nm[3]
+	local angleDeg, dist, bubble = viewNow()
+	local half = math.rad(angleDeg / 2)
 	local eye = Vector3.new(PC.pos.X, V.eye, PC.pos.Y)
 	for _, m in folder:GetChildren() do
 		if not m:IsA("Model") or m == me or not m:GetAttribute("Enemy") then
@@ -260,15 +266,21 @@ end
 -- ------------------------------------------------------------------ vision fan (VisionFan.ts): 120 rays from the
 -- player at eye height 1.25 m, reaching the 37 m cone ahead (a 12 deg soft shoulder) and the 1.5 m bubble behind, each
 -- stopped by sight blockers (walls, foliage); everything outside that polygon dims to rgb(0.03, 0.05, 0.1) at 50%.
--- Drawn as one EditableMesh ring (the polygon cut out of an 80 m disc on the ground): a single mesh has no internal
--- seams, unlike the earlier two-half SurfaceGui disc whose join showed as a line.
+-- Drawn as one EditableMesh ring (the polygon cut out of an 80 m disc): a single mesh has no internal seams. The web
+-- dims in screen space (a stencil from the ground polygon), so walls and props outside the fan darken too: every vertex
+-- is pulled along its line to the camera (V' = C + (V - C) k), which keeps its screen position and puts the ring in
+-- front of the scene.
 local RAYS = 120
 local EYE_Y = 1.25
 local R_OUT = 80 -- metres: past the gameplay camera's view
 local fanPart: MeshPart? = nil
 local fanMesh: any = nil
 local inner: { number } = {}
+local outerIds: { number } = {}
+local NEAR = 0.12 -- k: the ring sits at 12% of the way from the camera to the ground
 local fanFailed = false
+local ground: { Vector3 } = {}
+local groundOut: { Vector3 } = {}
 
 local function buildFan(): boolean
 	local AssetService = game:GetService("AssetService")
@@ -279,14 +291,23 @@ local function buildFan(): boolean
 			local a = (i / RAYS) * math.pi * 2 - math.pi
 			inner[i + 1] = em:AddVertex(Vector3.zero)
 			outer[i + 1] = em:AddVertex(Vector3.new(math.sin(a), 0, math.cos(a)) * R_OUT * S)
+			outerIds[i + 1] = outer[i + 1]
+		end
+		-- flat normals of our own: the engine does not recompute normals when vertices move, and stale per-vertex
+		-- normals lit alternate rays differently (radial streaks)
+		local up = em:AddNormal(Vector3.yAxis)
+		local down = em:AddNormal(-Vector3.yAxis)
+		local function tri(a: number, b: number, c: number, n: number)
+			local f = em:AddTriangle(a, b, c)
+			em:SetFaceNormals(f, { n, n, n })
 		end
 		for i = 1, RAYS do
 			local j = i % RAYS + 1
-			-- both windings: the top face shows from above, the other is culled (no double blending)
-			em:AddTriangle(inner[i], outer[i], outer[j])
-			em:AddTriangle(inner[i], outer[j], inner[j])
-			em:AddTriangle(inner[i], outer[j], outer[i])
-			em:AddTriangle(inner[i], inner[j], outer[j])
+			-- both windings: the side facing the camera shows, the other is culled (no double blending)
+			tri(inner[i], outer[i], outer[j], up)
+			tri(inner[i], outer[j], inner[j], up)
+			tri(inner[i], outer[j], outer[i], down)
+			tri(inner[i], inner[j], outer[j], down)
 		end
 		local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
 		part.Name = "VisionFan"
@@ -321,13 +342,14 @@ function Vision.fan(alive: boolean)
 		return
 	end
 	part.Parent = Workspace:FindFirstChild("LocalFx") or Workspace
-	local V = Config.View
-	local nm = if night() then V.nightMul else { 1, 1, 1 }
-	local half = math.rad(V.angle * nm[1]) / 2
-	local range = V.dist * nm[2]
-	local bubble = V.bubble * nm[3]
+	local angleDeg, range, bubble = viewNow()
+	local half = math.rad(angleDeg) / 2
+	if PC.ads > 0.5 then
+		range *= 1.15
+	end
 	local x, z, facing = PC.pos.X, PC.pos.Y, PC.facing
 	local eye = Vector3.new(x, EYE_Y, z) * S
+	local base = Vector3.new(x, 0.1, z) * S -- the web draws the polygon at y 0.1 m
 	for i = 0, RAYS - 1 do
 		local a = (i / RAYS) * math.pi * 2 - math.pi
 		local off = math.abs(math.atan2(math.sin(a - facing), math.cos(a - facing)))
@@ -336,10 +358,17 @@ function Vision.fan(alive: boolean)
 		local dir = Vector3.new(math.sin(a), 0, math.cos(a))
 		local hit = Workspace:Raycast(eye, dir * reach * S, params)
 		local r = if hit then (Vector2.new(hit.Position.X, hit.Position.Z) / S - Vector2.new(x, z)).Magnitude else reach
-		fanMesh:SetPosition(inner[i + 1], dir * r * S)
+		ground[i + 1] = base + dir * r * S
+		groundOut[i + 1] = base + dir * R_OUT * S
 	end
-	-- the mesh is centred on the player (the outer ring keeps the bounds fixed), just over the floor
-	part.CFrame = CFrame.new(x * S, 0.06 * S, z * S)
+	local cam = Workspace.CurrentCamera
+	local C = cam.CFrame.Position
+	local origin = C + (base - C) * NEAR
+	for i = 1, RAYS do
+		fanMesh:SetPosition(inner[i], C + (ground[i] - C) * NEAR - origin)
+		fanMesh:SetPosition(outerIds[i], C + (groundOut[i] - C) * NEAR - origin)
+	end
+	part.CFrame = CFrame.new(origin)
 end
 
 --- the enemy head under a viewport point, if any (ray vs each visible enemy's Head part box)

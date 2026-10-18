@@ -190,6 +190,38 @@
    "creator": "see store",
    "role": "Wolf (static mesh, procedural trot)",
    "kind": "static"
+  },
+  "NPC_giant": {
+   "id": "4767830295",
+   "title": "Giant Zombie(R15)",
+   "creator": "GeneGauntlet",
+   "role": "Giant (melee boss, UltraMan)",
+   "kind": "humanoid",
+   "note": "9 scripts stripped"
+  },
+  "NPC_operator": {
+   "id": "9390562530",
+   "title": "R15 swat ai",
+   "creator": "Geniwerman1",
+   "role": "Operator (USEC)",
+   "kind": "humanoid",
+   "note": "8 scripts stripped"
+  },
+  "NPC_bloater": {
+   "id": "17485933925",
+   "title": "Mushroom Monster",
+   "creator": "superdognoe",
+   "role": "Bloater (Mushroom, rain)",
+   "kind": "static",
+   "note": "R6 rig used as a static creature; 3 scripts stripped"
+  },
+  "NPC_drone": {
+   "id": "285590061",
+   "title": "Robot Spider",
+   "creator": "Roblox",
+   "role": "Drone (Spider_Rifle, night)",
+   "kind": "static",
+   "note": "1 script stripped"
   }
  }
 }

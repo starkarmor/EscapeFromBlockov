@@ -182,6 +182,15 @@ function Nav.locate(x: number, z: number, hintY: number?): number
 	return 0
 end
 
+--- the closest navmesh point to (x, z)
+function Nav.snap(x: number, z: number): (number, number)
+	local i = Nav.locate(x, z)
+	if i == 0 then
+		return x, z
+	end
+	return closest(i, x, z)
+end
+
 function Nav.height(i: number): number
 	return cy[i]
 end

@@ -5,7 +5,7 @@
 local PhysicsService = game:GetService("PhysicsService")
 
 local Physics = {}
-local GROUPS = { "Ground", "M0", "M1", "M4", "M27", "M31", "Chars", "QBullet", "QSight", "QSightHard", "QBody" }
+local GROUPS = { "Ground", "M0", "M1", "M4", "M27", "M31", "MCover", "Chars", "QBullet", "QSight", "QSightHard", "QBody", "QBlast", "Grenade", "Smoke" }
 
 function Physics.setup()
 	for _, g in GROUPS do
@@ -26,8 +26,16 @@ function Physics.setup()
 	only("QSight", { "M4", "M31" })
 	only("QSightHard", { "M31" }) -- hurt searches see through foliage
 	only("QBody", { "M1", "M27", "M31" })
+	-- half cover (MCover): bodies and bullets, not sight, not explosions (CheckObsticle); grenades pass live cover
+	only("MCover", { "Chars", "QBullet", "QBody" })
+	-- explosion line of sight: walls, doors, ground (no half cover)
+	only("QBlast", { "M27", "M31", "Ground" })
+	-- grenade bodies: ground, walls, doors, foliage (World.grenadeSolid), not characters or live cover
+	only("Grenade", { "Ground", "M1", "M4", "M27", "M31", "Default" })
+	-- smoke clouds block sight only (the fan, AI searches and shoot checks), not bullets or explosions
+	only("Smoke", { "QSight", "QSightHard" })
 	only("M0", {})
-	only("M4", { "QSight" })
+	only("M4", { "QSight", "Grenade" })
 end
 
 return Physics

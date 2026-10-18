@@ -223,6 +223,11 @@ function Combat.update(dt: number)
 	local using = player:GetAttribute("UseId") ~= nil
 	-- ACTIONS: reload allows moving and running; an item use allows moving, not running
 	PC.actionRun = not using
+	if PC.held == "throw" then
+		require(script.Parent.Throw).update(dt, held and not PC.blocked)
+		pressed = false
+		return
+	end
 	if PC.held == "melee" then
 		meleeCd = math.max(0, meleeCd - dt)
 		if pressed and meleeCd <= 0 and not PC.dashing() and not PC.blocked and not using then
@@ -292,8 +297,9 @@ function Combat.start()
 		elseif input.KeyCode == Enum.KeyCode.R then
 			Net.event("Reload"):FireServer()
 		elseif input.KeyCode == Enum.KeyCode.X then
-			-- StopAction: cancels a reload, an item use or a hold
+			-- StopAction: cancels a reload, an item use, a hold or a throw aim
 			Net.event("StopAction"):FireServer()
+			require(script.Parent.Throw).cancel()
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
@@ -325,11 +331,16 @@ function Combat.start()
 			end
 			Fx.muzzle(a, b[1])
 			Sfx.at(if d >= 100 then "rifle" else "pistol", a, 60)
-		elseif kind == "explode" then
-			Fx.explode(a, b)
+		elseif kind == "explode" or kind == "flash" then
+			-- a = centre (m), b = radius, c = the item's shake factor (World.blast: 0.4 x shake within 30 m)
+			if kind == "flash" then
+				Fx.flash(a, b)
+			else
+				Fx.explode(a, b)
+			end
 			local dist = (Vector2.new(a.X, a.Z) - PC.pos).Magnitude
-			if dist < 20 then
-				CameraRig.shake(0.35 * (1 - dist / 20), "explosion", Vector2.new(PC.pos.X - a.X, PC.pos.Y - a.Z))
+			if dist < 30 and (c or 1) > 0 then
+				CameraRig.shake(0.4 * (c or 1), "explosion", Vector2.new(a.X - PC.pos.X, a.Z - PC.pos.Y))
 			end
 			local snd = Instance.new("Sound")
 			snd.SoundId = "rbxasset://sounds/impact_explosion_03.mp3"
@@ -341,6 +352,9 @@ function Combat.start()
 			end)
 		elseif kind == "impact" then
 			Fx.impact(a, b)
+			Sfx.at("impact", a, 25)
+		elseif kind == "debris" then
+			Fx.impact(a, Vector3.yAxis)
 			Sfx.at("impact", a, 25)
 		end
 	end)
