@@ -83,7 +83,10 @@ function NoteUI.start()
 		if not gui.Enabled or os.clock() - openedAt < 0.2 then
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.F then
+		-- a click / tap, Esc, F, or the gamepad's A / B / X
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+			or input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.F or input.KeyCode == Enum.KeyCode.ButtonA
+			or input.KeyCode == Enum.KeyCode.ButtonB or input.KeyCode == Enum.KeyCode.ButtonX then
 			close()
 		end
 	end)

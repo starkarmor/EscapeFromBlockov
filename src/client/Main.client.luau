@@ -20,6 +20,7 @@ local DayNight = require(script.Parent.DayNight)
 local Sfx = require(script.Parent.Sfx)
 local Inventory = require(script.Parent.Inventory)
 local Throw = require(script.Parent.Throw)
+local Controls = require(script.Parent.Controls)
 local stepT = 0
 
 local player = Players.LocalPlayer
@@ -43,6 +44,8 @@ pcall(function()
 	end
 end)
 
+Controls.start()
+require(script.Parent.TouchUI).start()
 CharAnim.start()
 Hud.start()
 Combat.start()
@@ -63,8 +66,8 @@ end, false, 3000, Enum.KeyCode.Space)
 local Net = require(Shared.Net)
 local BulletList = require(script.Parent.BulletList)
 local SLOT_KEYS = { [Enum.KeyCode.Three] = 1, [Enum.KeyCode.Four] = 2, [Enum.KeyCode.Five] = 3, [Enum.KeyCode.Six] = 4, [Enum.KeyCode.Seven] = 5, [Enum.KeyCode.Eight] = 6 }
-UserInputService.InputBegan:Connect(function(input, processed)
-	if processed or PC.blocked then
+local function onKey(kc: Enum.KeyCode)
+	if PC.blocked then
 		return
 	end
 	-- World.handleSlots: 1 / 2 / V switch, "Empty slot" / "No melee weapon" when there is nothing there; V on the melee
@@ -79,8 +82,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	local function has(k: string): boolean
 		return eq[k] ~= nil and eq[k] ~= ""
 	end
-	if input.KeyCode == Enum.KeyCode.One or input.KeyCode == Enum.KeyCode.Two then
-		local key = if input.KeyCode == Enum.KeyCode.One then "gun" else "gun2"
+	if kc == Enum.KeyCode.One or kc == Enum.KeyCode.Two then
+		local key = if kc == Enum.KeyCode.One then "gun" else "gun2"
 		if not has(key) then
 			Hud.toast("Empty slot", "info")
 			return
@@ -88,7 +91,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		PC.held = "gun"
 		PC.slot = if key == "gun" then 1 else 2
 		Net.event("SelectSlot"):FireServer(key)
-	elseif input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.Right then
+	elseif kc == Enum.KeyCode.Left or kc == Enum.KeyCode.Right then
 		-- World.switchWeapon: the equipped firearm1 / firearm2 / melee in order, Left = previous, wrapping
 		local list = {}
 		for _, k in { "gun", "gun2", "melee" } do
@@ -98,7 +101,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		end
 		if #list > 0 then
 			local cur = if PC.held == "melee" then "melee" elseif PC.slot == 2 then "gun2" else "gun"
-			local i = (table.find(list, cur) or 1) - (if input.KeyCode == Enum.KeyCode.Left then 1 else -1)
+			local i = (table.find(list, cur) or 1) - (if kc == Enum.KeyCode.Left then 1 else -1)
 			if i < 1 then
 				i = #list
 			elseif i > #list then
@@ -109,7 +112,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 			PC.slot = if key == "gun" then 1 elseif key == "gun2" then 2 else 3
 			Net.event("SelectSlot"):FireServer(key)
 		end
-	elseif input.KeyCode == Enum.KeyCode.C then
+	elseif kc == Enum.KeyCode.C then
 		-- World: C puts the weapon away / takes it back out
 		if PC.held == "none" then
 			local key = if has("gun") then "gun" elseif has("gun2") then "gun2" else "melee"
@@ -120,27 +123,27 @@ UserInputService.InputBegan:Connect(function(input, processed)
 			PC.held = "none"
 			Net.event("SelectSlot"):FireServer("none")
 		end
-	elseif input.KeyCode == Enum.KeyCode.T then
+	elseif kc == Enum.KeyCode.T then
 		-- SwitchBulletType: open the type list / apply its selection (audio 'reload' when a new type is applied)
 		if BulletList.press() then
 			require(script.Parent.Sfx).play("reload")
 		end
-	elseif input.KeyCode == Enum.KeyCode.Up or input.KeyCode == Enum.KeyCode.Down then
-		BulletList.switchInput(if input.KeyCode == Enum.KeyCode.Up then 1 else -1)
-	elseif input.KeyCode == Enum.KeyCode.P then
+	elseif kc == Enum.KeyCode.Up or kc == Enum.KeyCode.Down then
+		BulletList.switchInput(if kc == Enum.KeyCode.Up then 1 else -1)
+	elseif kc == Enum.KeyCode.P then
 		-- UI_ToggleCameraMode: Photo Mode, only while no view is open (PC.blocked)
-		require(script.Parent.PhotoMode).activate(input)
-	elseif input.KeyCode == Enum.KeyCode.N then
+		require(script.Parent.PhotoMode).activate()
+	elseif kc == Enum.KeyCode.N then
 		-- World.toggleNightVision (the server answers with the toast)
 		Net.event("NightVision"):FireServer()
-	elseif input.KeyCode == Enum.KeyCode.F1 then
+	elseif kc == Enum.KeyCode.F1 then
 		-- CharacterMainControl.Quack (our Whistle): the voice and an AI noise of radius 15 at the character
 		require(script.Parent.Sfx).play("whistle")
 		Net.event("Whistle"):FireServer()
-	elseif input.KeyCode == Enum.KeyCode.Y then
+	elseif kc == Enum.KeyCode.Y then
 		-- World.ts: Y toggles the top-down view
 		CameraRig.topDown = not CameraRig.topDown
-	elseif input.KeyCode == Enum.KeyCode.V then
+	elseif kc == Enum.KeyCode.V then
 		if PC.held == "melee" then
 			local key = if has("gun") then "gun" elseif has("gun2") then "gun2" else nil
 			if key then
@@ -155,8 +158,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 			PC.slot = 3
 			Net.event("SelectSlot"):FireServer("melee")
 		end
-	elseif SLOT_KEYS[input.KeyCode] then
-		local id, count = Hud.hotbarItem(SLOT_KEYS[input.KeyCode])
+	elseif SLOT_KEYS[kc] then
+		local id, count = Hud.hotbarItem(SLOT_KEYS[kc])
 		if id and count <= 0 then
 			-- World: "No <item> left"
 			local it = require(Shared.gen.Items).items[id]
@@ -166,7 +169,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 			local it = require(Shared.gen.Items).items[id]
 			if it and it.kind == "throwable" then
 				if Throw.select(id) then
-					PC.slot = SLOT_KEYS[input.KeyCode] + 3
+					PC.slot = SLOT_KEYS[kc] + 3
 					Net.event("SelectSlot"):FireServer("throw")
 				end
 			else
@@ -174,11 +177,28 @@ UserInputService.InputBegan:Connect(function(input, processed)
 			end
 		end
 	end
+end
+UserInputService.InputBegan:Connect(function(input, processed)
+	if not processed then
+		onKey(input.KeyCode)
+	end
+end)
+-- the same actions from the gamepad / touch controls
+Controls.onKey(function(kc, down)
+	if not down then
+		return
+	end
+	if kc == Enum.KeyCode.Space then
+		PC.requestDodge()
+	else
+		onKey(kc)
+	end
 end)
 
 local snapped = false
 RunService:BindToRenderStep("Blockov3C", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	dt = math.min(dt, 0.05) -- core/Loop.ts clamps the frame dt to 0.05 s
+	Controls.update(dt)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then

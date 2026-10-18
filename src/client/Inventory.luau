@@ -22,6 +22,7 @@ local Items = require(Shared.gen.Items)
 local Inv = require(Shared.Inv)
 local PC = require(script.Parent.PlayerControl)
 local Icon = require(script.Parent.Icon)
+local Controls = require(script.Parent.Controls)
 
 local player = Players.LocalPlayer
 local Inventory = {}
@@ -110,6 +111,17 @@ end
 local function screenPos(v: Vector2): Vector2
 	return v + game:GetService("GuiService"):GetGuiInset()
 end
+
+-- the pointer in screen space: the mouse, or the last touch (touch has no hover position)
+local touchAt = Vector2.zero
+local function pointer(): Vector2
+	return if Controls.mode == "touch" then touchAt else UserInputService:GetMouseLocation()
+end
+
+-- gamepad: a focus cursor over the cells (the LootView has no gamepad path in the source)
+local padFocus: Ref? = nil
+local menuOpts: { { string } } = {}
+local menuIdx = 1
 
 local function new(class: string, props: { [string]: any }, parent: Instance?): any
 	local o = Instance.new(class)
@@ -541,13 +553,30 @@ local function cellButton(parent: Instance, ref: Ref, pos: UDim2, size: UDim2, e
 			Inventory.renderTip()
 		end
 	end)
-	b.MouseButton1Down:Connect(function()
+	b.MouseButton1Down:Connect(function(x, y)
+		if Controls.mode == "gamepad" then
+			return -- the focus cursor's buttons act (below)
+		end
 		-- a press arms the drag (6 px makes it one) and the click; an empty cell only ever clicks
-		drag = { ref = ref, start = UserInputService:GetMouseLocation(), moved = false, ghost = nil }
+		local at = screenPos(Vector2.new(x, y))
+		if Controls.mode == "touch" then
+			touchAt = at
+		end
+		local d = { ref = ref, start = at, moved = false, ghost = nil }
+		drag = d
+		if Controls.mode == "touch" then
+			-- touch: a long press (0.5 s, no drag) opens the operation menu (right click)
+			task.delay(0.5, function()
+				if drag == d and not d.moved then
+					drag = nil
+					Inventory.context(ref, b)
+				end
+			end)
+		end
 	end)
 	b.MouseButton1Up:Connect(function()
 		-- the release resolves on the cell under the pointer: a click (same cell, no drag) or a drop
-		if drag then
+		if drag and Controls.mode ~= "gamepad" then
 			Inventory.endDrag(ref)
 		end
 	end)
@@ -1114,7 +1143,8 @@ function Inventory.renderTip()
 		end
 	end
 	local inst = hover and instAt(hover)
-	if not Inventory.open or not inst or split or (drag and drag.moved) then
+	-- touch has no hover: the selected item's details panel carries the same information
+	if not Inventory.open or not inst or split or (drag and drag.moved and Controls.mode ~= "gamepad") or Controls.mode == "touch" then
 		tip.Visible = false
 		return
 	end
@@ -1219,7 +1249,17 @@ function Inventory.placeTip()
 		return
 	end
 	local k = oscale.Scale
-	local m = UserInputService:GetMouseLocation() / k
+	local m = pointer() / k
+	if Controls.mode == "gamepad" and padFocus then
+		-- at the focused cell's lower right corner
+		for i = #cells, 1, -1 do
+			if sameRef(cells[i].ref, padFocus) and cells[i].btn.Parent then
+				local b = cells[i].btn
+				m = screenPos(b.AbsolutePosition + b.AbsoluteSize) / k
+				break
+			end
+		end
+	end
 	local sz = tip.AbsoluteSize / k
 	local vw = W()
 	tip.Position = UDim2.fromOffset(math.clamp(m.X, 0, math.max(0, vw - sz.X)), math.clamp(m.Y, 0, math.max(0, 1440 - sz.Y)))
@@ -1262,6 +1302,8 @@ function Inventory.context(t: Ref, el: GuiObject)
 		return
 	end
 	menuFor = t
+	menuOpts = opts
+	menuIdx = 1
 	for _, c in menu:GetChildren() do
 		if c:IsA("GuiObject") then
 			c:Destroy()
@@ -1345,12 +1387,12 @@ local function renderSplit()
 		local con: RBXScriptConnection
 		local up: RBXScriptConnection
 		con = UserInputService.InputChanged:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseMovement then
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				setFrom(input.Position.X)
 			end
 		end)
 		up = UserInputService.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				con:Disconnect()
 				up:Disconnect()
 			end
@@ -1533,6 +1575,233 @@ local function onKey(input: InputObject, down: boolean)
 	end
 end
 
+-- ------------------------------------------------------------------ gamepad (focus cursor)
+-- D-pad / left stick move the focus between cells (nearest cell in that direction), A picks the focused item up and A on
+-- another cell drops it there (move / merge / swap, as a drag), A on the carried cell puts it back (a click: select);
+-- X = the double-click action, Y = the operation menu (D-pad + A inside it), LB lock, RB use, RS mark, B backs out
+-- (menu / split / carry, then the view), View closes.
+local focusFrame: Frame? = nil
+local function cellOf(t: Ref?): GuiObject?
+	if not t then
+		return nil
+	end
+	for i = #cells, 1, -1 do
+		local c = cells[i]
+		if sameRef(c.ref, t) and c.btn.Parent then
+			return c.btn
+		end
+	end
+	return nil
+end
+
+local function setFocus(t: Ref?)
+	padFocus = t
+	hover = t
+	Inventory.renderTip()
+end
+
+local function ensureFocus()
+	if padFocus and cellOf(padFocus) then
+		return
+	end
+	local first = sel and cellOf(sel) and sel or { src = "bag", i = "0" }
+	if not cellOf(first) and cells[1] then
+		first = cells[1].ref
+	end
+	setFocus(first)
+end
+
+local function moveFocus(dir: Vector2)
+	if menu.Visible then
+		menuIdx = math.clamp(menuIdx + (if dir.Y > 0 then 1 elseif dir.Y < 0 then -1 else 0), 1, math.max(1, #menuOpts))
+		return
+	end
+	if split then
+		local cur = split
+		cur.n = math.clamp(cur.n + (if dir.X > 0 then 1 elseif dir.X < 0 then -1 else 0), 1, cur.max)
+		renderSplit()
+		return
+	end
+	ensureFocus()
+	local from = cellOf(padFocus)
+	if not from then
+		return
+	end
+	local c = from.AbsolutePosition + from.AbsoluteSize / 2
+	local best, bestScore = nil, math.huge
+	for _, e in cells do
+		local b = e.btn
+		if b.Parent and b ~= from and b.AbsoluteSize.X > 0 then
+			local vis = true
+			local x: Instance? = b
+			while vis and x and x:IsA("GuiObject") do
+				vis = (x :: GuiObject).Visible
+				x = x.Parent
+			end
+			local d = b.AbsolutePosition + b.AbsoluteSize / 2 - c
+			local l = d.Magnitude
+			if vis and l > 1 then
+				local dot = d.Unit:Dot(dir)
+				if dot > 0.5 then
+					local score = l * (2 - dot)
+					if score < bestScore then
+						best, bestScore = e.ref, score
+					end
+				end
+			end
+		end
+	end
+	if best then
+		setFocus(best)
+	end
+end
+
+local PAD_DIR = { [Enum.KeyCode.DPadUp] = Vector2.new(0, -1), [Enum.KeyCode.DPadDown] = Vector2.new(0, 1),
+	[Enum.KeyCode.DPadLeft] = Vector2.new(-1, 0), [Enum.KeyCode.DPadRight] = Vector2.new(1, 0) }
+function Inventory.padKey(kc: Enum.KeyCode)
+	if not Inventory.open then
+		return
+	end
+	if PAD_DIR[kc] then
+		moveFocus(PAD_DIR[kc])
+		return
+	end
+	if kc == Enum.KeyCode.ButtonB then
+		if split then
+			split = nil
+			renderSplit()
+		elseif menu.Visible then
+			menu.Visible = false
+		elseif drag then
+			if drag.ghost then
+				drag.ghost:Destroy()
+			end
+			drag = nil
+			Inventory.render()
+		else
+			Inventory.toggle(false)
+		end
+		return
+	end
+	if split then
+		if kc == Enum.KeyCode.ButtonA then
+			local cur = split
+			op("split", cur.src, cur.i, cur.n, cur.to)
+			split = nil
+			renderSplit()
+		end
+		return
+	end
+	if menu.Visible then
+		if kc == Enum.KeyCode.ButtonA and menuOpts[menuIdx] then
+			menu.Visible = false
+			Inventory.onMenu(menuOpts[menuIdx][1])
+		end
+		return
+	end
+	ensureFocus()
+	local t = padFocus
+	if not t then
+		return
+	end
+	if kc == Enum.KeyCode.ButtonA then
+		local d = drag
+		if d then
+			if sameRef(d.ref, t) then
+				-- put back: a click on it (select / deselect)
+				if d.ghost then
+					d.ghost:Destroy()
+				end
+				drag = nil
+				onClick(t)
+			else
+				endDrag(t)
+			end
+		elseif instAt(t) then
+			local nd = { ref = t, start = Vector2.zero, moved = false, ghost = nil }
+			drag = nd
+			sel = t
+			startGhost(nd)
+		else
+			onClick(t)
+		end
+	elseif kc == Enum.KeyCode.ButtonX then
+		op("act", t)
+	elseif kc == Enum.KeyCode.ButtonY then
+		local b = cellOf(t)
+		if b then
+			Inventory.context(t, b)
+		end
+	elseif kc == Enum.KeyCode.ButtonL1 and t.src == "bag" then
+		op("lock", t)
+	elseif kc == Enum.KeyCode.ButtonR3 then
+		op("wish", t)
+	elseif kc == Enum.KeyCode.ButtonR1 and t.src == "bag" then
+		local inst = instAt(t)
+		if inst and Inv.consumable(inst.id) then
+			Net.event("UseItem"):FireServer(inst.id)
+			Inventory.toggle(false)
+		end
+	end
+end
+
+--- per frame while open: the focus outline / menu highlight, the carried item at the focus, stick navigation
+local stickT = 0
+local stickHeld = false
+local function padStep(dt: number)
+	local on = Inventory.open and Controls.mode == "gamepad"
+	if not focusFrame then
+		local f = new("Frame", { Name = "PadFocus", BackgroundTransparency = 1, ZIndex = 79, Interactable = false, Visible = false }, oroot)
+		corner(f, 18)
+		new("UIStroke", { Thickness = 5, Color = Color3.fromHex("#ffd23f"), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
+		focusFrame = f
+	end
+	local ff = focusFrame :: Frame
+	if not on then
+		ff.Visible = false
+		return
+	end
+	ensureFocus()
+	local target: GuiObject? = nil
+	if menu.Visible then
+		local n = 0
+		for _, c in menu:GetChildren() do
+			if c:IsA("TextButton") and c.LayoutOrder == menuIdx then
+				target = c
+			end
+			n += 1
+		end
+	elseif not split then
+		target = cellOf(padFocus)
+	end
+	ff.Visible = target ~= nil
+	if target then
+		local k = oscale.Scale
+		local p0 = screenPos(target.AbsolutePosition) / k
+		local sz = target.AbsoluteSize / k
+		ff.Position = UDim2.fromOffset(p0.X - 4, p0.Y - 4)
+		ff.Size = UDim2.fromOffset(sz.X + 8, sz.Y + 8)
+		local d = drag
+		if d and d.ghost and not menu.Visible then
+			d.ghost.Position = UDim2.fromOffset(p0.X + sz.X / 2 + 24, p0.Y + sz.Y / 2 + 24)
+		end
+	end
+	-- the left stick steps the focus (0.3 s before repeating, then every 0.15 s)
+	local v = Controls.move()
+	if v.Magnitude > 0.6 then
+		stickT -= dt
+		if stickT <= 0 then
+			local dir = if math.abs(v.X) > math.abs(v.Y) then Vector2.new(math.sign(v.X), 0) else Vector2.new(0, math.sign(v.Y))
+			moveFocus(dir)
+			stickT = if stickHeld then 0.15 else 0.3
+			stickHeld = true
+		end
+	else
+		stickT = 0
+		stickHeld = false
+	end
+end
+
 -- ------------------------------------------------------------------ open / close
 function Inventory.toggle(on: boolean?)
 	local was = Inventory.open
@@ -1546,8 +1815,9 @@ function Inventory.toggle(on: boolean?)
 	gui.Enabled = Inventory.open
 	overlay.Enabled = Inventory.open
 	PC.invOpen = Inventory.open
-	UserInputService.MouseIconEnabled = Inventory.open
+	UserInputService.MouseIconEnabled = Inventory.open and Controls.mode == "kbm"
 	op("view", Inventory.open)
+	padFocus = nil
 	if not Inventory.open then
 		sel = nil
 		hover = nil
@@ -1646,15 +1916,27 @@ function Inventory.start()
 		end
 		return Enum.ContextActionResult.Sink
 	end, false, 3000, Enum.KeyCode.Tab)
+	Controls.onKey(function(kc, down)
+		if down and kc == Enum.KeyCode.Tab and not PC.mapOpen and not PC.photoOpen and not PC.resultOpen then
+			Inventory.toggle()
+		end
+	end)
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if input.KeyCode == Enum.KeyCode.Escape and Inventory.open and not split then
 			Inventory.toggle(false)
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+		if input.UserInputType == Enum.UserInputType.Touch then
+			touchAt = screenPos(Vector2.new(input.Position.X, input.Position.Y))
+		end
+		if Inventory.open and Controls.mode == "gamepad" then
+			Inventory.padKey(input.KeyCode)
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2
+			or input.UserInputType == Enum.UserInputType.Touch then
 			-- a press anywhere but the menu closes it
 			if menu.Visible then
-				local m = UserInputService:GetMouseLocation()
+				local m = pointer()
 				local a0, a1 = screenPos(menu.AbsolutePosition), screenPos(menu.AbsolutePosition + menu.AbsoluteSize)
 				if m.X < a0.X or m.X > a1.X or m.Y < a0.Y or m.Y > a1.Y then
 					menu.Visible = false
@@ -1678,11 +1960,14 @@ function Inventory.start()
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			-- released outside every cell: the cells' MouseButton1Up runs first when there is one
 			local d = drag
-			if d then
-				local m = UserInputService:GetMouseLocation() - game:GetService("GuiService"):GetGuiInset()
+			if d and Controls.mode ~= "gamepad" then
+				if input.UserInputType == Enum.UserInputType.Touch then
+					touchAt = screenPos(Vector2.new(input.Position.X, input.Position.Y))
+				end
+				local m = pointer() - game:GetService("GuiService"):GetGuiInset()
 				task.delay(0.05, function()
 					if drag == d then
 						endDrag(cellAt(m))
@@ -1694,12 +1979,16 @@ function Inventory.start()
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(input)
-		if input.UserInputType ~= Enum.UserInputType.MouseMovement or not Inventory.open then
+		local ut = input.UserInputType
+		if (ut ~= Enum.UserInputType.MouseMovement and ut ~= Enum.UserInputType.Touch) or not Inventory.open then
 			return
 		end
+		if ut == Enum.UserInputType.Touch then
+			touchAt = screenPos(Vector2.new(input.Position.X, input.Position.Y))
+		end
 		local d = drag
-		if d then
-			local m = UserInputService:GetMouseLocation()
+		if d and Controls.mode ~= "gamepad" then
+			local m = pointer()
 			if not d.moved and (m - d.start).Magnitude > 6 then
 				startGhost(d)
 			end
@@ -1711,6 +2000,7 @@ function Inventory.start()
 	end)
 	-- the search magnifier spins at 80 rpm
 	RunService.RenderStepped:Connect(function(dt)
+		padStep(dt)
 		if not Inventory.open or not view then
 			return
 		end

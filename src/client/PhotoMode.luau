@@ -8,6 +8,9 @@
 -- - FOV (wheel): clamp(fov - 1 per notch, 5, 60).
 -- - Focus (RMB held): a 100 m ray from the camera puts the focus marker (0.3 m, shrinking over 1 s) 0.2 m back from the hit.
 -- - Capture (Space): the screen punch (white .7 -> 0 over 0.3 s), the shutter sound, 0.3 s lock.
+-- Gamepad: left stick move, right stick look (90 deg/s), LB / RB down / up, LS fast, D-pad up / down FOV, LT focus,
+-- A / RT capture, X hide UI, B leaves. Touch: the move / aim sticks move / look, a pinch sets the FOV, buttons for
+-- Capture, Up, Down, Hide UI and Exit (TouchUI).
 -- Roblox adaptations: the world cannot be paused in a shared server (the web sets timeScale 0), so only this player's
 -- input stops; the photo goes to the player's Roblox captures (CaptureService) instead of a downloaded PNG.
 local Players = game:GetService("Players")
@@ -18,16 +21,28 @@ local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Units = require(ReplicatedStorage:WaitForChild("Shared").Units)
 local PC = require(script.Parent.PlayerControl)
+local Controls = require(script.Parent.Controls)
 
 local S = Units.S
 local player = Players.LocalPlayer
 local PhotoMode = {}
 PhotoMode.active = false
+local padHeld: { [Enum.KeyCode]: boolean } = {} -- gamepad buttons and touch holds while active
+local fastLatch = false
+local pinchFov = 30
 
 local PHOTO = { moveSpeed = 4, fastMoveSpeed = 16, aimSpeed = 4.5, fovMin = 5, fovMax = 60, focusRay = 100, focusBack = 0.2,
 	focusMeshSize = 0.3, focusMeshAppearTime = 1, captureLock = 0.3 }
 local ROWS = { { "WASD", "Move" }, { "Q", "Camera Down" }, { "E", "Camera Up" }, { "Wheel", "Zoom" }, { "RMB", "Focal Point" },
 	{ "Shift", "Move Faster" }, { "Space", "Take Photo" }, { "K", "Copy Screenshot Path" } }
+-- the same list for the gamepad / touch paths
+local PAD_ROWS = { { Enum.KeyCode.Thumbstick1, "Move" }, { Enum.KeyCode.Thumbstick2, "Look" }, { Enum.KeyCode.ButtonL1, "Camera Down" },
+	{ Enum.KeyCode.ButtonR1, "Camera Up" }, { Enum.KeyCode.DPadUp, "Zoom" }, { Enum.KeyCode.ButtonL2, "Focal Point" },
+	{ Enum.KeyCode.ButtonL3, "Move Faster" }, { Enum.KeyCode.ButtonA, "Take Photo" }, { Enum.KeyCode.ButtonX, "Photo Instructions" },
+	{ Enum.KeyCode.ButtonB, "Exit" } }
+local TOUCH_ROWS = { { "Left stick", "Move" }, { "Right stick", "Look" }, { "Pinch", "Zoom" }, { "Up / Down", "Camera Up / Down" },
+	{ "●", "Take Photo" }, { "UI", "Photo Instructions" }, { "Exit", "Leave" } }
+local fillRows: () -> () = function() end
 
 local pos = Vector3.zero
 local yaw, pitch, fov = 0, 0, 45
@@ -96,8 +111,9 @@ local function build()
 		return t
 	end
 	label(ui, "Photo Mode", 34, FONT_B, 0)
-	local function row(key: string, text: string, order: number, small: boolean?)
+	local function row(key: any, text: string, order: number, small: boolean?)
 		local r = Instance.new("Frame")
+		r.Name = "Row"
 		r.BackgroundTransparency = 1
 		r.AutomaticSize = Enum.AutomaticSize.XY
 		r.LayoutOrder = order
@@ -108,6 +124,16 @@ local function build()
 		rl.Padding = UDim.new(0, 16)
 		rl.SortOrder = Enum.SortOrder.LayoutOrder
 		rl.Parent = r
+		if typeof(key) == "EnumItem" then
+			-- a gamepad button: the platform's image
+			local im = Instance.new("ImageLabel")
+			im.BackgroundTransparency = 1
+			im.Size = UDim2.fromOffset(44, 44)
+			im.Image = UserInputService:GetImageForKeyCode(key)
+			im.Parent = r
+			label(r, text, if small then 24 else 28, FONT, 2, nil, if small then 0.3 else 0)
+			return
+		end
 		local k = Instance.new("TextLabel")
 		k.BackgroundColor3 = Color3.new(1, 1, 1)
 		k.Text = key
@@ -123,10 +149,21 @@ local function build()
 		kp.Parent = k
 		label(r, text, if small then 24 else 28, FONT, 2, nil, if small then 0.3 else 0)
 	end
-	for i, rw in ROWS do
-		row(rw[1], rw[2], i)
+	fillRows = function()
+		for _, c in ui:GetChildren() do
+			if c.Name == "Row" then
+				c:Destroy()
+			end
+		end
+		local rows = if Controls.mode == "gamepad" then PAD_ROWS elseif Controls.mode == "touch" then TOUCH_ROWS else ROWS
+		for i, rw in rows do
+			row(rw[1], rw[2], i)
+		end
+		if Controls.mode == "kbm" then
+			row("O", "Photo Instructions", 99, true)
+		end
 	end
-	row("O", "Photo Instructions", 99, true)
+	fillRows()
 	-- #photo-flash: the capture punch
 	flash = Instance.new("Frame")
 	flash.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -161,6 +198,7 @@ function PhotoMode.activate(_by: InputObject?)
 	end
 	activatedAt = os.clock()
 	PhotoMode.active = true
+	fillRows()
 	PC.photoOpen = true
 	local cam = Workspace.CurrentCamera
 	saved = { cf = cam.CFrame, fov = cam.FieldOfView }
@@ -174,15 +212,18 @@ function PhotoMode.activate(_by: InputObject?)
 	focusTimer = 0
 	-- the HUD hides (HUDManager.ShouldDisplay)
 	table.clear(hiddenGuis)
+	Controls.photo = true
 	for _, g in player.PlayerGui:GetChildren() do
-		if g:IsA("ScreenGui") and g ~= gui and g.Enabled then
+		if g:IsA("ScreenGui") and g ~= gui and g.Enabled and g.Name ~= "TouchControls" and g.Name ~= "TouchSticks" then
 			g.Enabled = false
 			table.insert(hiddenGuis, g)
 		end
 	end
 	gui.Enabled = true
 	ui.Visible = indicator
-	UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+	if Controls.mode == "kbm" then
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+	end
 	UserInputService.MouseIconEnabled = false
 end
 
@@ -193,6 +234,8 @@ function PhotoMode.deactivate()
 	end
 	PhotoMode.active = false
 	PC.photoOpen = false
+	Controls.photo = false
+	padHeld = {}
 	marker.Transparency = 1
 	gui.Enabled = false
 	for _, g in hiddenGuis do
@@ -247,11 +290,24 @@ function PhotoMode.update(dt: number)
 	local function down(k: Enum.KeyCode): boolean
 		return UserInputService:IsKeyDown(k)
 	end
+	local function held(k: Enum.KeyCode): boolean
+		return padHeld[k] == true
+	end
 	local mx = (if down(Enum.KeyCode.D) then 1 else 0) - (if down(Enum.KeyCode.A) then 1 else 0)
 	local my = (if down(Enum.KeyCode.W) then 1 else 0) - (if down(Enum.KeyCode.S) then 1 else 0)
-	local ud = (if down(Enum.KeyCode.E) then 1 else 0) - (if down(Enum.KeyCode.Q) then 1 else 0)
-	local fast = down(Enum.KeyCode.LeftShift) or down(Enum.KeyCode.RightShift)
-	local focus = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+	local stick = Controls.move()
+	if mx == 0 and my == 0 then
+		mx, my = stick.X, -stick.Y
+	end
+	local ud = (if down(Enum.KeyCode.E) or held(Enum.KeyCode.ButtonR1) or held(Enum.KeyCode.E) then 1 else 0)
+		- (if down(Enum.KeyCode.Q) or held(Enum.KeyCode.ButtonL1) or held(Enum.KeyCode.Q) then 1 else 0)
+	local fast = down(Enum.KeyCode.LeftShift) or down(Enum.KeyCode.RightShift) or fastLatch
+	local focus = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or held(Enum.KeyCode.ButtonL2)
+	-- the right stick / touch aim stick looks at 90 deg/s; the D-pad steps the FOV
+	local look = Controls.aimStick()
+	ax += look.X * 90 / PHOTO.aimSpeed
+	ay += look.Y * 90 / PHOTO.aimSpeed
+	wh += ((if held(Enum.KeyCode.DPadUp) then 1 else 0) - (if held(Enum.KeyCode.DPadDown) then 1 else 0)) * 20 * dt
 	if not shooting then
 		-- UpdateMove: forward / right on the ground plane, up / down after the normalise
 		local fwd = Vector3.new(math.sin(math.rad(yaw)), 0, -math.cos(math.rad(yaw)))
@@ -309,6 +365,21 @@ function PhotoMode.start()
 		if processed or not PhotoMode.active or os.clock() - activatedAt < 0.05 then
 			return
 		end
+		local kc = input.KeyCode
+		if string.sub(kc.Name, 1, 6) == "Button" or string.sub(kc.Name, 1, 4) == "DPad" then
+			padHeld[kc] = true
+			if (kc == Enum.KeyCode.ButtonA or kc == Enum.KeyCode.ButtonR2) and not shooting then
+				capture()
+			elseif kc == Enum.KeyCode.ButtonX then
+				indicator = not indicator
+				ui.Visible = indicator
+			elseif kc == Enum.KeyCode.ButtonL3 then
+				fastLatch = not fastLatch
+			elseif kc == Enum.KeyCode.ButtonB then
+				PhotoMode.deactivate()
+			end
+			return
+		end
 		if input.KeyCode == Enum.KeyCode.Space and not shooting then
 			capture()
 		elseif input.KeyCode == Enum.KeyCode.O then
@@ -318,6 +389,36 @@ function PhotoMode.start()
 		elseif input.KeyCode == Enum.KeyCode.K then
 			require(script.Parent.Hud).toast("Photos are saved to your Roblox captures.", "info")
 		elseif input.KeyCode == Enum.KeyCode.P then
+			PhotoMode.deactivate()
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		padHeld[input.KeyCode] = nil
+	end)
+	UserInputService.TouchPinch:Connect(function(_points, sc, _vel, state)
+		if not PhotoMode.active then
+			return
+		end
+		if state == Enum.UserInputState.Begin then
+			pinchFov = fov
+		end
+		fov = math.clamp(pinchFov / math.max(0.1, sc), PHOTO.fovMin, PHOTO.fovMax)
+	end)
+	-- the touch buttons: Capture (Space), Up (E) / Down (Q) held, Hide UI (O), Exit (P)
+	Controls.onKey(function(kc, isDown)
+		if not PhotoMode.active then
+			return
+		end
+		if kc == Enum.KeyCode.E or kc == Enum.KeyCode.Q then
+			padHeld[kc] = if isDown then true else nil
+		elseif not isDown then
+			return
+		elseif kc == Enum.KeyCode.Space and not shooting then
+			capture()
+		elseif kc == Enum.KeyCode.O then
+			indicator = not indicator
+			ui.Visible = indicator
+		elseif kc == Enum.KeyCode.P and os.clock() - activatedAt > 0.05 then
 			PhotoMode.deactivate()
 		end
 	end)

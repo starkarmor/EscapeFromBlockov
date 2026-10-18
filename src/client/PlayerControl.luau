@@ -15,6 +15,7 @@ local Units = require(Shared.Units)
 local Curve = require(Shared.Curve)
 local Net = require(Shared.Net)
 local CameraRig = require(script.Parent.CameraRig)
+local Controls = require(script.Parent.Controls)
 
 local S = Units.S
 local M, ST, D = Config.Move, Config.Stamina, Config.Dash
@@ -84,6 +85,11 @@ local function moveIntent(): Vector2
 	if UserInputService:IsKeyDown(Enum.KeyCode.A) then x -= 1 end
 	if UserInputService:IsKeyDown(Enum.KeyCode.S) then z += 1 end
 	if UserInputService:IsKeyDown(Enum.KeyCode.W) then z -= 1 end
+	-- the left stick / touch move stick when no key is down (analog: a partial push walks slower)
+	if x == 0 and z == 0 then
+		local a = Controls.move()
+		x, z = a.X, a.Y
+	end
 	local v = CameraRig.viewToWorld(x, z)
 	if v.Magnitude > 1 then
 		v = v.Unit
@@ -98,6 +104,7 @@ function PC.update(dt: number, cursor: Vector2)
 	end
 	clock += dt
 	PC.blocked = PC.lootOpen or PC.invOpen or PC.resultOpen or PC.mapOpen or PC.noteOpen or PC.photoOpen
+	Controls.blocked = PC.blocked
 	PC.meleeAnim = math.max(0, PC.meleeAnim - dt * 5)
 	local p = r.Position
 	PC.pos = Vector2.new(p.X / S, p.Z / S)
@@ -106,7 +113,7 @@ function PC.update(dt: number, cursor: Vector2)
 	local gun = if PC.held == "gun" then PC.gun else nil
 
 	-- ADS (ItemAgent_Gun.UpdateAds): ramp 1 / ADSTime in, at least 4/s out
-	local adsHeld = not PC.blocked and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+	local adsHeld = not PC.blocked and (UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or Controls.adsHeld())
 	PC.adsInput = adsHeld and PC.actionMove and not PC.sprinting and PC.dodgeT <= 0
 	if gun then
 		local adsIn = 1 / math.max(0.01, gun.ADSTime)
@@ -162,7 +169,7 @@ function PC.update(dt: number, cursor: Vector2)
 	dodgeQueued = false
 
 	-- run (Sprint Key Mode Hold): the key held; ADS clears
-	local runHeld = not PC.blocked and (UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift))
+	local runHeld = not PC.blocked and (UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) or Controls.runHeld())
 	runToggle = runHeld and not adsHeld
 
 	local moving = mag > 0.02 and PC.actionMove and walkEff > 0

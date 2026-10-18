@@ -18,6 +18,7 @@ local PC = require(script.Parent.PlayerControl)
 local Combat = require(script.Parent.Combat)
 local Fx = require(script.Parent.Fx)
 local CameraRig = require(script.Parent.CameraRig)
+local Controls = require(script.Parent.Controls)
 
 local player = Players.LocalPlayer
 local S = Units.S
@@ -81,6 +82,61 @@ local function text(parent: Instance, s: string, size: number, props: { [string]
 end
 
 --- key cap: white .784 r10, text #1E272E bold, hard #7E878C 4 px drop
+-- every key hint: the keyboard key; the platform's button image on a gamepad (UserInputService:GetImageForKeyCode);
+-- hidden on touch (the touch buttons carry their own labels)
+type Cap = { holder: Frame, cap: TextLabel, under: Frame, img: ImageLabel, key: string }
+local caps: { Cap } = {}
+local HOT_KEYS = { ["3"] = 1, ["4"] = 2, ["5"] = 3, ["6"] = 4, ["7"] = 5, ["8"] = 6 }
+local function applyCap(c: Cap)
+	local m = Controls.mode
+	local pad = if m == "gamepad" then Controls.PAD_FOR[c.key] else nil
+	if m == "gamepad" and HOT_KEYS[c.key] then
+		-- the hotbar: LB on the D-pad's pick only
+		pad = if HOT_KEYS[c.key] == Controls.padSlot then Enum.KeyCode.ButtonL1 else nil
+	end
+	if m == "touch" or (m == "gamepad" and not pad) then
+		c.holder.Visible = false
+		return
+	end
+	c.holder.Visible = true
+	if pad then
+		c.cap.Text = ""
+		c.cap.BackgroundTransparency = 1
+		c.under.Visible = false
+		c.img.Image = UserInputService:GetImageForKeyCode(pad)
+		c.img.Visible = true
+		c.cap.Size = UDim2.fromOffset(c.img.Size.X.Offset, c.cap.Size.Y.Offset)
+		c.cap.AutomaticSize = Enum.AutomaticSize.None
+	else
+		c.cap.Text = c.key
+		c.cap.BackgroundTransparency = 0.216
+		c.under.Visible = true
+		c.img.Visible = false
+		c.cap.AutomaticSize = Enum.AutomaticSize.X
+		c.cap.Size = UDim2.fromOffset(0, c.cap.Size.Y.Offset)
+	end
+end
+local function applyCaps()
+	for i = #caps, 1, -1 do
+		local c = caps[i]
+		if c.holder.Parent == nil then
+			table.remove(caps, i)
+		else
+			applyCap(c)
+		end
+	end
+end
+
+--- a transparent touch target over a HUD element (touch only)
+local taps: { GuiButton } = {}
+local function tappable(over: GuiObject, fn: () -> ())
+	local b = new("TextButton", { Name = "Tap", Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 50,
+		Visible = Controls.mode == "touch", Selectable = false }, over)
+	b.Activated:Connect(fn)
+	table.insert(taps, b)
+	return b
+end
+
 local function keycap(parent: Instance, key: string, h: number?): Frame
 	local hh = h or 32.4
 	local holder = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, hh + 4), AutomaticSize = Enum.AutomaticSize.X }, parent)
@@ -99,6 +155,11 @@ local function keycap(parent: Instance, key: string, h: number?): Frame
 	new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, cap)
 	local under = new("Frame", { BackgroundColor3 = Color3.fromHex("#7e878c"), BorderSizePixel = 0, Position = UDim2.fromOffset(0, 4), Size = UDim2.new(1, 0, 0, hh), ZIndex = 1 }, holder)
 	corner(under, 10)
+	local img = new("ImageLabel", { Name = "Pad", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(hh * 1.15, hh * 1.15), ZIndex = 3, Visible = false }, holder)
+	local entry = { holder = holder, cap = cap, under = under, img = img, key = key }
+	table.insert(caps, entry)
+	applyCap(entry)
 	return holder
 end
 
@@ -150,6 +211,41 @@ Hud.QCOL = { [0] = Color3.fromHex("#ffffff"), Color3.fromHex("#8be913"), Color3.
 Hud.text, Hud.box, Hud.keycap, Hud.corner = text, box, keycap, corner
 
 -- ------------------------------------------------------------------ build
+-- the Controls panel rows per device (the web's keyboard list; the gamepad's map from Controls.luau)
+local CONTROL_ROWS = {
+	kbm = { { "WASD", "Move" }, { "Shift", "Run" }, { "Space", "Dodge" }, { "LMB", "Shoot" }, { "RMB", "Aim" }, { "R", "Reload" }, { "F", "Interact" },
+		{ "Tab", "Backpack" }, { "1 2 V", "Weapons" }, { "3-8", "Items" }, { "X", "Cancel" } },
+	gamepad = { { Enum.KeyCode.Thumbstick1, "Move" }, { Enum.KeyCode.ButtonL3, "Run" }, { Enum.KeyCode.ButtonA, "Dodge" },
+		{ Enum.KeyCode.ButtonR2, "Shoot" }, { Enum.KeyCode.Thumbstick2, "Aim" }, { Enum.KeyCode.ButtonL2, "Aim Down Sights" },
+		{ Enum.KeyCode.ButtonY, "Reload" }, { Enum.KeyCode.ButtonX, "Interact" }, { Enum.KeyCode.ButtonSelect, "Backpack (hold: menu)" },
+		{ Enum.KeyCode.ButtonR1, "Weapons" }, { Enum.KeyCode.DPadLeft, "Pick item" }, { Enum.KeyCode.ButtonL1, "Use item" },
+		{ Enum.KeyCode.ButtonR3, "Ammo type" }, { Enum.KeyCode.ButtonB, "Cancel" } },
+}
+local function fillControls()
+	local panel = R.controls
+	if not panel then
+		return
+	end
+	for _, c in panel:GetChildren() do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	for i, row in CONTROL_ROWS[if Controls.mode == "gamepad" then "gamepad" else "kbm"] do
+		local e = box(panel, Vector2.new(0, 58), INK, 0.773, 999)
+		e.AutomaticSize = Enum.AutomaticSize.X
+		e.LayoutOrder = i
+		new("UIPadding", { PaddingLeft = UDim.new(0, 25), PaddingRight = UDim.new(0, 25) }, e)
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) }, e)
+		if typeof(row[1]) == "EnumItem" then
+			new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromOffset(46, 46), Image = UserInputService:GetImageForKeyCode(row[1]) }, e)
+		else
+			keycap(e, row[1], 38.5)
+		end
+		text(e, row[2], 28)
+	end
+end
+
 local function build()
 	gui = new("ScreenGui", { Name = "RaidHud", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 	root = new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromOffset(2560, 1440) }, gui)
@@ -188,16 +284,8 @@ local function build()
 	R.hint = hint
 	local panel = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -25, 0, 168.5), Size = UDim2.fromOffset(0, 0), AutomaticSize = Enum.AutomaticSize.XY, Visible = false }, root)
 	new("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, panel)
-	for i, row in { { "WASD", "Move" }, { "Shift", "Run" }, { "Space", "Dodge" }, { "LMB", "Shoot" }, { "RMB", "Aim" }, { "R", "Reload" }, { "F", "Interact" }, { "Tab", "Backpack" }, { "1 2 V", "Weapons" }, { "3-8", "Items" }, { "X", "Cancel" } } do
-		local e = box(panel, Vector2.new(0, 58), INK, 0.773, 999)
-		e.AutomaticSize = Enum.AutomaticSize.X
-		e.LayoutOrder = i
-		new("UIPadding", { PaddingLeft = UDim.new(0, 25), PaddingRight = UDim.new(0, 25) }, e)
-		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) }, e)
-		keycap(e, row[1], 38.5)
-		text(e, row[2], 28)
-	end
 	R.controls = panel
+	fillControls()
 
 	-- the calm-dim group: weapons, hotbar, hp, rings, armor, ammo fade to .42 after 4 s without a change
 	local dim = new("CanvasGroup", { Name = "Dimmable", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, root)
@@ -266,6 +354,10 @@ local function build()
 		local kc = keycap(b, spec[2])
 		kc.AnchorPoint = Vector2.new(0.5, 0)
 		kc.Position = UDim2.new(0.5, 0, 1, 8.8)
+		local key = ({ Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.V })[i]
+		tappable(b, function()
+			Controls.tap(key)
+		end)
 		local punch = new("UIScale", { Scale = 1 }, b)
 		R.weapons[i] = { frame = b, sel = sel, icon = icon, name = name, id = "", punch = punch }
 	end
@@ -289,6 +381,10 @@ local function build()
 		local kc = keycap(b, tostring(i + 2))
 		kc.AnchorPoint = Vector2.new(0.5, 0)
 		kc.Position = UDim2.new(0.5, 0, 1, 8.8)
+		local hk = ({ Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six, Enum.KeyCode.Seven, Enum.KeyCode.Eight })[i]
+		tappable(b, function()
+			Controls.tap(hk)
+		end)
 		R.hot[i] = { frame = b, ringIn = ringIn, name = name, icon = icon, ct = ct, cts = cts, iconId = "" }
 	end
 
@@ -301,6 +397,9 @@ local function build()
 	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, typ)
 	local typT = text(typ, "", 18, { TextColor3 = Color3.fromRGB(0, 0, 0), Size = UDim2.fromOffset(0, 30.6) })
 	typT:FindFirstChildOfClass("UIStroke").Enabled = false
+	tappable(typ, function()
+		Controls.tap(Enum.KeyCode.T)
+	end)
 	local tk = keycap(typ, "T", 30)
 	tk.AnchorPoint = Vector2.new(0, 0.5)
 	tk.Position = UDim2.new(1, 18, 0.5, 0)
@@ -337,6 +436,9 @@ local function build()
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) }, cancel)
 	keycap(cancel, "X")
 	text(cancel, "Cancel", 28)
+	tappable(cancel, function()
+		Controls.tap(Enum.KeyCode.X)
+	end)
 	R.prog, R.progFill = prog, bf
 
 	-- extraction countdown (top 105.4 centred, 209.19x74.07): green fill with rolling stripes, runner, "00:05. 000"
@@ -526,7 +628,7 @@ function Hud.setPrompt(opts: { PromptOpt }?, at: Vector3?)
 	local sp, on = toScreen(at)
 	pr.Visible = on
 	pr.Position = UDim2.fromOffset(sp.X, sp.Y)
-	local key = ""
+	local key = Controls.mode
 	for _, o in opts do
 		key ..= o.label .. (if o.sel then "*" else "") .. (o.req or "") .. "|"
 	end
@@ -774,6 +876,7 @@ end
 
 -- ------------------------------------------------------------------ frame
 local updateCore: (number) -> ()
+local lastPadSlot = 0
 --- #hud.inv-open (duckov.css): weapons, hotbar, ammo, distance marker, stamina ring, statuses, clock, controls hint,
 --- HP, rings and armor hide while the LootView is open; the reticle too (uiOpen)
 function Hud.update(dt: number)
@@ -790,6 +893,11 @@ function Hud.update(dt: number)
 			if o then
 				o.Visible = true
 			end
+		end
+		-- touch: the Backpack / Map / More buttons sit where the Controls hint is
+		R.hint.Visible = Controls.mode ~= "touch"
+		if Controls.mode == "touch" then
+			R.controls.Visible = false
 		end
 	end
 end
@@ -939,11 +1047,21 @@ function updateCore(dt: number)
 			hs.ringIn.Color = Color3.fromHex("#ff9e3a")
 			hs.ringIn.Thickness = 3
 			hs.ringIn.Transparency = 0
+		elseif Controls.mode == "gamepad" and k == Controls.padSlot then
+			-- the D-pad's pick (LB uses it)
+			hs.ringIn.Enabled = true
+			hs.ringIn.Color = WHITE
+			hs.ringIn.Thickness = 3
+			hs.ringIn.Transparency = 0
 		else
 			hs.ringIn.Color = WHITE
 			hs.ringIn.Thickness = 2
 			hs.ringIn.Transparency = 0.702
 		end
+	end
+	if Controls.padSlot ~= lastPadSlot then
+		lastPadSlot = Controls.padSlot
+		applyCaps()
 	end
 
 	-- the open ammo type list
@@ -975,6 +1093,11 @@ function updateCore(dt: number)
 				if st and selE then
 					st.Enabled = false
 				end
+				-- touch: an entry applies itself
+				tappable(p, function()
+					BL.index = i
+					Controls.tap(Enum.KeyCode.T)
+				end)
 			end
 		end
 	end
@@ -1279,6 +1402,24 @@ function Hud.start()
 		if not processed and input.KeyCode == Enum.KeyCode.O and not PC.photoOpen then
 			R.controls.Visible = not R.controls.Visible
 		end
+	end)
+	-- the quick menu's Controls entry (gamepad / touch)
+	Controls.onKey(function(kc, down)
+		if down and kc == Enum.KeyCode.O and not PC.photoOpen then
+			R.controls.Visible = not R.controls.Visible
+		end
+	end)
+	Controls.onMode(function()
+		applyCaps()
+		fillControls()
+		for i = #taps, 1, -1 do
+			if taps[i].Parent == nil then
+				table.remove(taps, i)
+			else
+				taps[i].Visible = Controls.mode == "touch"
+			end
+		end
+		promptKey = ""
 	end)
 end
 

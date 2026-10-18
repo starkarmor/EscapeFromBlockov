@@ -19,6 +19,7 @@ local PC = require(script.Parent.PlayerControl)
 local Hud = require(script.Parent.Hud)
 local Inventory = require(script.Parent.Inventory)
 local Sfx = require(script.Parent.Sfx)
+local Controls = require(script.Parent.Controls)
 
 local player = Players.LocalPlayer
 local S = Units.S
@@ -203,8 +204,12 @@ function Interact.update(_dt: number)
 	if #opts > 0 and not Inventory.open and not PC.blocked then
 		local focus = shown[1]
 		Hud.setPrompt(opts, Vector3.new(focus.x, 0.62, focus.z))
+		Controls.prompt = opts[selIndex] and opts[selIndex].label
+		Controls.promptCount = #opts
 	else
 		Hud.setPrompt(nil, nil)
+		Controls.prompt = nil
+		Controls.promptCount = 0
 	end
 	local holdId = player:GetAttribute("HoldId")
 	if typeof(holdId) == "string" then
@@ -212,6 +217,18 @@ function Interact.update(_dt: number)
 		local dur = player:GetAttribute("HoldTime")
 		if typeof(t0) == "number" and typeof(dur) == "number" then
 			Hud.setProgress((Workspace:GetServerTimeNow() - t0) / dur)
+		end
+	end
+end
+
+local function keyDown(kc: Enum.KeyCode)
+	if kc == Enum.KeyCode.F then
+		if lastList[selIndex] then
+			Net.event("Interact"):FireServer(lastList[selIndex].id)
+		end
+	elseif kc == Enum.KeyCode.Up or kc == Enum.KeyCode.Down then
+		if #lastList > 1 then
+			selIndex = (selIndex + (if kc == Enum.KeyCode.Down then 1 else -1) - 1) % #lastList + 1
 		end
 	end
 end
@@ -249,14 +266,16 @@ function Interact.start()
 		if processed or Inventory.open then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.F then
-			if lastList[selIndex] then
-				Net.event("Interact"):FireServer(lastList[selIndex].id)
+		keyDown(input.KeyCode)
+	end)
+	-- the gamepad's X / D-pad and the touch Interact button (held for hold interactions)
+	Controls.onKey(function(kc, down)
+		if down then
+			if not Inventory.open and not PC.blocked then
+				keyDown(kc)
 			end
-		elseif input.KeyCode == Enum.KeyCode.Up or input.KeyCode == Enum.KeyCode.Down then
-			if #lastList > 1 then
-				selIndex = (selIndex + (if input.KeyCode == Enum.KeyCode.Down then 1 else -1) - 1) % #lastList + 1
-			end
+		elseif kc == Enum.KeyCode.F and player:GetAttribute("HoldId") then
+			Net.event("InteractCancel"):FireServer()
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(input, processed)

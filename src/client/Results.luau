@@ -151,7 +151,9 @@ local function curtain(kind: string, onDone: () -> ())
 		UserInputService.MouseIconEnabled = true
 		local conn: RBXScriptConnection
 		conn = UserInputService.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+			-- a click / tap or the gamepad's A
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2
+				or input.UserInputType == Enum.UserInputType.Touch or input.KeyCode == Enum.KeyCode.ButtonA then
 				conn:Disconnect()
 				local s = Instance.new("UIScale")
 				s.Scale = 0.9
@@ -313,8 +315,26 @@ local function result(dead: boolean, info: any, lines: { string }?)
 		bscale.Scale = 1.1
 		TweenService:Create(bscale, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Scale = 1 }):Play()
 	end)
-	btn.MouseButton1Click:Connect(function()
+	local went = false
+	local function go()
+		if went then
+			return
+		end
+		went = true
 		curtain(if dead then "dead" else "extract", redeploy)
+	end
+	btn.MouseButton1Click:Connect(go)
+	-- the gamepad's A presses the button (no pointer there)
+	local padConn: RBXScriptConnection
+	padConn = UserInputService.InputBegan:Connect(function(input)
+		if not btn.Parent or went then
+			padConn:Disconnect()
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.ButtonA then
+			padConn:Disconnect()
+			go()
+		end
 	end)
 end
 

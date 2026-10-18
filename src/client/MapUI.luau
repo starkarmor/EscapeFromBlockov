@@ -16,6 +16,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Units = require(Shared.Units)
 local MapData = require(Shared.MapData)
 local PC = require(script.Parent.PlayerControl)
+local Controls = require(script.Parent.Controls)
 
 local S = Units.S
 local MapUI = {}
@@ -288,6 +289,47 @@ function MapUI.toggle(on: boolean?)
 	end
 end
 
+--- user marker at a screen point (GUI space): places one, or removes the one there
+local function toggleMarker(m: Vector2)
+	local abs, size = mapFrame.AbsolutePosition, mapFrame.AbsoluteSize
+	local u = (m - abs) / size
+	if u.X < 0 or u.Y < 0 or u.X > 1 or u.Y > 1 then
+		return
+	end
+	local wx, wz = B.minX + u.X * BW, B.minZ + u.Y * BH
+	for i, mk in markers do
+		if (Vector2.new(mk.x, mk.z) - Vector2.new(wx, wz)).Magnitude < 4 / zoom then
+			mk.ui:Destroy()
+			table.remove(markers, i)
+			return
+		end
+	end
+	local f = ring(overlay, worldToMap(wx, wz), 9, Color3.fromHex("#f85566"), 4)
+	table.insert(markers, { x = wx, z = wz, ui = f })
+end
+
+local padZoom = 0
+local pinchFrom = 1
+-- touch: there is no Escape / M key
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "Close"
+closeBtn.Text = "Close"
+closeBtn.FontFace = FONT
+closeBtn.TextSize = 26
+closeBtn.TextColor3 = Color3.new(1, 1, 1)
+closeBtn.BackgroundColor3 = Color3.new(0, 0, 0)
+closeBtn.BackgroundTransparency = 0.35
+closeBtn.AnchorPoint = Vector2.new(1, 0)
+closeBtn.Position = UDim2.new(1, -24, 0, 24)
+closeBtn.Size = UDim2.fromOffset(96, 64)
+closeBtn.Visible = false
+closeBtn.ZIndex = 10
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5, 0)
+closeBtn.Parent = gui
+closeBtn.Activated:Connect(function()
+	MapUI.toggle(false)
+end)
+
 local dragging = false
 local dragFrom = Vector2.zero
 local panFrom = Vector2.zero
@@ -303,35 +345,66 @@ function MapUI.start()
 		if not MapUI.open then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.Escape then
+		if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.ButtonB or input.KeyCode == Enum.KeyCode.ButtonSelect then
 			MapUI.toggle(false)
-		elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+		elseif input.KeyCode == Enum.KeyCode.ButtonR2 or input.KeyCode == Enum.KeyCode.ButtonL2 then
+			padZoom = if input.KeyCode == Enum.KeyCode.ButtonR2 then 1 else -1
+		elseif input.KeyCode == Enum.KeyCode.ButtonX then
+			local vp = (Workspace.CurrentCamera :: Camera).ViewportSize
+			toggleMarker(vp / 2 - game:GetService("GuiService"):GetGuiInset())
+		elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			dragFrom = Vector2.new(input.Position.X, input.Position.Y)
 			panFrom = pan
 		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
 			-- user marker: right-click places, right-click on one removes it
-			local abs, size = mapFrame.AbsolutePosition, mapFrame.AbsoluteSize
-			local m = Vector2.new(input.Position.X, input.Position.Y)
-			local u = (m - abs) / size
-			if u.X < 0 or u.Y < 0 or u.X > 1 or u.Y > 1 then
-				return
-			end
-			local wx, wz = B.minX + u.X * BW, B.minZ + u.Y * BH
-			for i, mk in markers do
-				if (Vector2.new(mk.x, mk.z) - Vector2.new(wx, wz)).Magnitude < 4 / zoom then
-					mk.ui:Destroy()
-					table.remove(markers, i)
-					return
-				end
-			end
-			local f = ring(overlay, worldToMap(wx, wz), 9, Color3.fromHex("#f85566"), 4)
-			table.insert(markers, { x = wx, z = wz, ui = f })
+			toggleMarker(Vector2.new(input.Position.X, input.Position.Y))
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
+		end
+		if input.KeyCode == Enum.KeyCode.ButtonR2 or input.KeyCode == Enum.KeyCode.ButtonL2 then
+			padZoom = 0
+		end
+	end)
+	-- touch: one finger pans (below), a pinch zooms, a long press places / removes a marker, the close button leaves
+	UserInputService.TouchPinch:Connect(function(_points, sc, _vel, state)
+		if not MapUI.open then
+			return
+		end
+		if state == Enum.UserInputState.Begin then
+			pinchFrom = zoom
+		end
+		zoom = math.clamp(pinchFrom * sc, 1, 4)
+		dragging = false
+		layout()
+	end)
+	UserInputService.TouchLongPress:Connect(function(points, state)
+		if MapUI.open and state == Enum.UserInputState.Begin and points[1] then
+			dragging = false
+			toggleMarker(points[1])
+		end
+	end)
+	-- gamepad: the left stick pans, RT / LT zoom, X marks the map centre, B / View close
+	RunService.RenderStepped:Connect(function(dt)
+		if not MapUI.open then
+			return
+		end
+		local mv = Controls.move()
+		if Controls.mode == "gamepad" and (mv.Magnitude > 0 or padZoom ~= 0) then
+			pan -= mv * 900 * dt
+			if padZoom ~= 0 then
+				zoom = math.clamp(zoom * (1 + padZoom * 1.5 * dt), 1, 4)
+			end
+			layout()
+		end
+		closeBtn.Visible = Controls.mode == "touch"
+	end)
+	Controls.onKey(function(kc, down)
+		if down and kc == Enum.KeyCode.M then
+			MapUI.toggle()
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(input)
@@ -347,7 +420,7 @@ function MapUI.start()
 			local c = vp / 2 + pan
 			pan += (c - m) * (zoom / old - 1)
 			layout()
-		elseif input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+		elseif (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
 			pan = panFrom + (Vector2.new(input.Position.X, input.Position.Y) - dragFrom)
 			layout()
 		end

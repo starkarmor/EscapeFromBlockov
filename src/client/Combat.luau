@@ -17,12 +17,14 @@ local S = require(Shared.Units).S
 local Fx = require(script.Parent.Fx)
 local Vision = require(script.Parent.Vision)
 local Sfx = require(script.Parent.Sfx)
+local Controls = require(script.Parent.Controls)
 
 local player = Players.LocalPlayer
 local Combat = {}
 Combat.onSound = function(_at: Vector3) end
 
 local held = false -- LMB down
+local padHeld = false -- RT / the touch aim stick (Controls)
 local pressed = false -- a trigger press this frame
 local fireCd = 0
 local meleeCd = 0
@@ -35,13 +37,14 @@ local predictUntil = 0
 local R = { x = 0, y = 0, v = 0, h = 0, time = 0.001, recoverTime = 0, recover = 0, timer = 0, fresh = false, needX = 0, needY = 0, shotX = 0, shotY = 0, opposite = 0, lastMx = 0 / 0, lastMy = 0 / 0 }
 
 function Combat.triggerHeld(): boolean
-	return held
+	return held or padHeld
 end
 
 local function mousePos(): Vector2
 	-- GetMouseLocation is already in viewport pixels (top bar included), the space ViewportPointToRay and the
 	-- IgnoreGuiInset HUD use
-	return UserInputService:GetMouseLocation()
+	-- a gamepad / touch aim is a virtual cursor at the aim point (Controls)
+	return Controls.cursor or UserInputService:GetMouseLocation()
 end
 
 function Combat.cursor(): Vector2
@@ -207,6 +210,12 @@ local function fire(g: any, id: string)
 end
 
 function Combat.update(dt: number)
+	-- RT / the touch aim stick: a press on its rising edge, held like LMB
+	local pf = Controls.fireHeld()
+	if pf and not padHeld then
+		pressed = true
+	end
+	padHeld = pf
 	updateRecoil(dt)
 	local id = player:GetAttribute("Gun")
 	local g = if typeof(id) == "string" and PC.held == "gun" then Guns.rowWith(id, game:GetService("Players").LocalPlayer:GetAttribute("GunAtt")) else nil
@@ -226,7 +235,7 @@ function Combat.update(dt: number)
 	-- ACTIONS: reload allows moving and running; an item use allows moving, not running
 	PC.actionRun = not using
 	if PC.held == "throw" then
-		require(script.Parent.Throw).update(dt, held and not PC.blocked)
+		require(script.Parent.Throw).update(dt, (held or padHeld) and not PC.blocked)
 		pressed = false
 		return
 	end
@@ -247,7 +256,7 @@ function Combat.update(dt: number)
 		return
 	end
 	local auto = typeof(id) == "string" and Guns.auto(id)
-	local want = if auto then held else pressed
+	local want = if auto then (held or padHeld) else pressed
 	if g and want and fireCd <= 0 and PC.triggerLock <= 0 and not PC.dashing() and not reloading and not PC.blocked and not using then
 		if Combat.mag() > 0 then
 			fire(g, id :: string)
@@ -256,6 +265,16 @@ function Combat.update(dt: number)
 		end
 	end
 	pressed = false
+end
+
+local function onKey(kc: Enum.KeyCode)
+	if kc == Enum.KeyCode.R then
+		Net.event("Reload"):FireServer()
+	elseif kc == Enum.KeyCode.X then
+		-- StopAction: cancels a reload, an item use, a hold or a throw aim
+		Net.event("StopAction"):FireServer()
+		require(script.Parent.Throw).cancel()
+	end
 end
 
 function Combat.start()
@@ -291,12 +310,14 @@ function Combat.start()
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			held = true
 			pressed = true
-		elseif input.KeyCode == Enum.KeyCode.R then
-			Net.event("Reload"):FireServer()
-		elseif input.KeyCode == Enum.KeyCode.X then
-			-- StopAction: cancels a reload, an item use, a hold or a throw aim
-			Net.event("StopAction"):FireServer()
-			require(script.Parent.Throw).cancel()
+		elseif input.KeyCode == Enum.KeyCode.R or input.KeyCode == Enum.KeyCode.X then
+			onKey(input.KeyCode)
+		end
+	end)
+	-- the gamepad's Y / B and the touch Reload / Cancel buttons
+	Controls.onKey(function(kc, down)
+		if down and not PC.blocked then
+			onKey(kc)
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
